@@ -300,6 +300,21 @@ app.post("/api/profiles/:id/approve", authMiddleware, (req: any, res) => {
   res.json({ success: true, message: `Account approval verified for ${profiles[idx].full_name}` });
 });
 
+app.post("/api/profiles/:id/reject", authMiddleware, (req: any, res) => {
+  const { id } = req.params;
+  const profiles = readData<any[]>("committee_profiles.json", []);
+  const idx = profiles.findIndex((p) => p.id === id);
+
+  if (idx === -1) {
+    return res.status(404).json({ error: "Committee profile not found." });
+  }
+
+  profiles[idx].approved = false;
+  writeData("committee_profiles.json", profiles);
+
+  res.json({ success: true, message: `Account clearance revoked (set to false) for ${profiles[idx].full_name}` });
+});
+
 app.delete("/api/profiles/:id", authMiddleware, (req: any, res) => {
   const { id } = req.params;
   if (id === req.user.id) {

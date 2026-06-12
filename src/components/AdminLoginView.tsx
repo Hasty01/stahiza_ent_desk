@@ -59,26 +59,30 @@ export default function AdminLoginView({ onLoginSuccess }: AdminLoginViewProps) 
             throw new Error("Failed to register credential signal.");
           }
 
-          // Try to insert a pending/unapproved profile record in committee_profiles
+          // Try to upsert a pending/unapproved/safe profile record in committee_profiles
           try {
+            console.log("Auth signup succeeded. Attempting defensive schema upsert for profile ID:", authData.user.id);
             const { error: profileError } = await supabase
               .from("committee_profiles")
-              .insert([
-                {
-                  id: authData.user.id,
-                  full_name: fullName.trim(),
-                  username: username.trim().toLowerCase(),
-                  role: `${role.trim()} (Pending Admin Approval)`,
-                  email: email.trim(),
-                  approved: false
-                }
-              ]);
+              .upsert({
+                id: authData.user.id,
+                full_name: fullName.trim(),
+                username: username.trim().toLowerCase(),
+                role: `${role.trim()} (Pending Admin Approval)`,
+                email: email.trim(),
+                approved: false
+              }, { onConflict: "id" });
             
             if (profileError) {
-              console.warn("Could not insert profile automatically:", profileError);
+              console.warn("Auto-profile registration signal warning (could be schema discrepancy or permission constraint):", profileError);
+              if (profileError.code === "PGRST204" || profileError.message?.includes("email") || profileError.message?.includes("username")) {
+                setErrorText("Database Schema Alignment Required: The active 'committee_profiles' table does not have 'email' or 'username' columns. Please run the SQL migration script in your Supabase Editor to continue.");
+                setIsSubmitting(false);
+                return;
+              }
             }
           } catch (profileInsertErr) {
-            console.warn("Insert profile catch error:", profileInsertErr);
+            console.warn("Auto-profile upsert capture error:", profileInsertErr);
           }
 
           setSuccessText("Account request submitted! An Administrator must approve your account by verifying your profile in 'committee_profiles' before you can log in.");
@@ -141,14 +145,23 @@ export default function AdminLoginView({ onLoginSuccess }: AdminLoginViewProps) 
 
           // If the identifier doesn't contain "@", assume it's a username and look up the email
           if (!loginEmail.includes("@")) {
+            console.log("Identifying user by alias handle registration:", loginEmail);
             const { data: profile, error: lookupError } = await supabase
               .from("committee_profiles")
               .select("email")
               .eq("username", loginEmail.toLowerCase())
               .maybeSingle();
 
-            if (lookupError || !profile?.email) {
-              throw new Error(`Clearance rejected: No profile listed for username "${loginEmail}".`);
+            if (lookupError) {
+              console.error("Username index lookup fault:", lookupError);
+              if (lookupError.code === "PGRST204" || lookupError.message?.includes("email") || lookupError.message?.includes("username")) {
+                throw new Error("Supabase schema mismatch: The 'committee_profiles' table does not have 'email' and 'username' columns. Please run the SQL migration script (provided below) in your Supabase Editor, or log in using your email address instead.");
+              }
+              throw new Error(`Credential lookup error: ${lookupError.message}`);
+            }
+
+            if (!profile?.email) {
+              throw new Error(`Clearance rejected: No registered operator listed with handle "${loginEmail}".`);
             }
             loginEmail = profile.email;
           }

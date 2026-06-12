@@ -836,105 +836,11 @@ export default function AdminDashboardView({
         /* DESK APPROVALS MODULE */
         <div id="desk-approvals-console" className="space-y-8">
           
-          {/* APPLICANT QUEUE COMPONENT */}
+          {/* APPLICANT QUEUE COMPONENT - REDESIGNED MEMBERS PANEL */}
           <ApprovalQueue 
             onRefreshParent={fetchProfiles} 
             adminUserId={adminUser.id} 
           />
-
-          {/* APPROVED CREW REGISTRY LIST MODULE */}
-          <div className="bg-dark-card border border-dark-border rounded-3xl p-6 space-y-6 bg-dot-matrix relative overflow-hidden">
-            <div className="absolute inset-0 bg-dot-matrix opacity-10 pointer-events-none" />
-            
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 relative z-10 border-b border-dark-border pb-4">
-              <div>
-                <h3 className="font-display font-extrabold text-lg text-white flex items-center gap-2">
-                  STAHIZA Active Operating Crew
-                  <span className="bg-neon-green/20 border border-neon-green/40 text-neon-green font-mono px-2 py-0.5 rounded-lg text-[10px] font-bold">
-                    {profiles.filter((p) => p.approved !== false).length} Verified
-                  </span>
-                </h3>
-                <p className="text-xs text-gray-400 mt-1">
-                  Active administrators, graphics coordinators, DJ leads, and operations handlers with verified clearance.
-                </p>
-              </div>
-              <button
-                onClick={fetchProfiles}
-                disabled={profilesLoading}
-                className="px-3 py-1.5 bg-dark-bg border border-dark-border hover:border-neon-purple/50 text-gray-300 hover:text-white transition-all text-xs font-mono rounded-xl flex items-center gap-1.5 cursor-pointer"
-              >
-                <Terminal className={`w-3.5 h-3.5 ${profilesLoading ? "animate-spin text-neon-purple" : ""}`} />
-                Sync Crew Registry
-              </button>
-            </div>
-
-            {profilesLoading ? (
-              <div className="py-12 flex flex-col items-center justify-center space-y-2 relative z-10">
-                <div className="w-8 h-8 border-2 border-neon-purple border-t-transparent rounded-full animate-spin"></div>
-                <span className="text-xs font-mono text-gray-500">Refreshing crew parameters...</span>
-              </div>
-            ) : (
-              <div className="space-y-4 relative z-10">
-                {profiles.filter((p) => p.approved !== false).length === 0 ? (
-                  <div className="py-8 text-center text-gray-500 font-mono text-xs">
-                    No verified operators found in memory buffers.
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 gap-3">
-                    {profiles
-                      .filter((p) => p.approved !== false)
-                      .map((profile) => (
-                        <div
-                          key={profile.id}
-                          className="bg-dark-bg/40 border border-dark-border/60 hover:border-dark-border rounded-2xl p-4 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 transition-all duration-300"
-                        >
-                          <div className="flex items-center gap-4 flex-1 min-w-0">
-                            <div className="w-10 h-10 rounded-xl bg-neon-purple/10 border border-neon-purple/20 flex items-center justify-center text-neon-purple font-display font-black text-lg">
-                              {profile.full_name?.charAt(0) || "U"}
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <h5 className="font-display font-bold text-sm text-white truncate">
-                                  {profile.full_name}
-                                </h5>
-                                <span className="text-[10px] font-mono text-neon-cyan font-bold bg-neon-cyan/5 px-1.5 py-0.5 border border-neon-cyan/15 rounded-md">
-                                  @{profile.username || "operator"}
-                                </span>
-                                {adminUser.id === profile.id && (
-                                  <span className="text-[9px] font-mono text-neon-pink border border-neon-pink/20 bg-neon-pink/5 px-1 rounded animate-pulse">
-                                    Active Operator
-                                  </span>
-                                )}
-                              </div>
-                              <div className="flex flex-wrap items-center gap-x-2 text-[10px] font-mono text-gray-500 mt-0.5">
-                                <span>Role: <strong className="text-gray-300">{profile.role}</strong></span>
-                                <span>&bull;</span>
-                                <span>{profile.email}</span>
-                              </div>
-                            </div>
-                          </div>
-
-                          {adminUser.id !== profile.id && (
-                            <button
-                              onClick={() => {
-                                if (confirm(`Security Protocol Priority Warning: Revoke clearance and erase ${profile.full_name} from active operating logs?`)) {
-                                  handleRejectProfile(profile.id, profile.full_name);
-                                }
-                              }}
-                              className="px-3.5 py-2 border border-dark-border text-gray-500 hover:text-neon-pink hover:border-neon-pink/30 rounded-xl bg-dark-bg/20 transition-all cursor-pointer flex items-center justify-center gap-1 text-[11px] font-mono"
-                              title="Revoke / Suspend Account Access"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                              Revoke Crew
-                            </button>
-                          )}
-                        </div>
-                      ))}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
 
         </div>
       )}

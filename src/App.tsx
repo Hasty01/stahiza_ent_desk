@@ -12,6 +12,7 @@ import { StahizaEvent, Shoutout, GalleryImage } from "./types";
 import { Terminal, ShieldCheck, Mail, Sparkles, AlertCircle } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { supabase, isSupabaseConfigured } from "./lib/supabase";
+import FuturisticDJPreloader from "./components/FuturisticDJPreloader";
 
 export default function App() {
   const [currentView, setCurrentView] = useState<string>("home");
@@ -24,6 +25,9 @@ export default function App() {
 
   // Layout Loading State
   const [loading, setLoading] = useState<boolean>(true);
+
+  // Preloader active on initial load
+  const [preloaderActive, setPreloaderActive] = useState<boolean>(true);
 
   // Toast System State
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
@@ -373,7 +377,17 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-dark-bg flex flex-col justify-between text-gray-200 selection:bg-neon-purple selection:text-white">
+    <>
+      <AnimatePresence mode="wait">
+        {preloaderActive && (
+          <FuturisticDJPreloader onLoaded={() => {
+            setPreloaderActive(false);
+            navigateTo("admin-dashboard");
+          }} />
+        )}
+      </AnimatePresence>
+
+      <div className="min-h-screen bg-dark-bg flex flex-col justify-between text-gray-200 selection:bg-neon-purple selection:text-white">
       
       {/* GLOBAL TOAST FLOATER ZONE */}
       <div id="toast-floater-zone" className="fixed top-20 right-4 z-50 flex flex-col gap-2 w-full max-w-xs sm:max-w-md pointer-events-none px-4">
@@ -477,5 +491,6 @@ export default function App() {
       {/* SYSTEM FOOTER */}
       <Footer onNavigate={navigateTo} />
     </div>
+    </>
   );
 }
