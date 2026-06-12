@@ -38,10 +38,19 @@ export default function AdminLoginView({ onLoginSuccess }: AdminLoginViewProps) 
       setIsSubmitting(true);
       try {
         if (isSupabaseConfigured && supabase) {
-          // Sign up user via official Supabase Auth flow
+          // Sign up user via official Supabase Auth flow with metadata variables
           const { data: authData, error: authError } = await supabase.auth.signUp({
             email: email.trim(),
             password: password,
+            options: {
+              data: {
+                full_name: fullName.trim(),
+                username: username.trim().toLowerCase(),
+                role: role.trim(),
+                email: email.trim(),
+                approved: false
+              }
+            }
           });
 
           if (authError) throw authError;
