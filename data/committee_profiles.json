@@ -1,0 +1,18 @@
+[
+  {
+    "id": "admin-1",
+    "full_name": "Joel Hasty",
+    "username": "joel",
+    "role": "STAHIZA Entertainment President",
+    "email": "admin@stahiza.edu",
+    "password": "admin"
+  },
+  {
+    "id": "comm-2",
+    "full_name": "Nicoletta Ent",
+    "username": "nicoletta",
+    "role": "Graphics Coordinator & DJ Lead",
+    "email": "hastyjoel1@gmail.com",
+    "password": "admin"
+  }
+]

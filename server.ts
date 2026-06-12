@@ -60,6 +60,7 @@ function seedData() {
     {
       id: "admin-1",
       full_name: "Joel Hasty",
+      username: "joel",
       role: "STAHIZA Entertainment President",
       email: "admin@stahiza.edu",
       password: "admin" // For testing
@@ -67,6 +68,7 @@ function seedData() {
     {
       id: "comm-2",
       full_name: "Nicoletta Ent",
+      username: "nicoletta",
       role: "Graphics Coordinator & DJ Lead",
       email: "hastyjoel1@gmail.com",
       password: "admin" // For testing
@@ -161,16 +163,20 @@ app.use("/uploads", express.static(UPLOADS_DIR));
 app.post("/api/auth/login", (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) {
-    return res.status(400).json({ error: "Email and password are required." });
+    return res.status(400).json({ error: "Email or username and password are required." });
   }
 
   const profiles = readData<any[]>("committee_profiles.json", []);
+  const searchKey = email.trim().toLowerCase();
+  
   const user = profiles.find(
-    (p) => p.email.toLowerCase() === email.trim().toLowerCase() && p.password === password
+    (p) => 
+      (p.email.toLowerCase() === searchKey || (p.username && p.username.toLowerCase() === searchKey)) && 
+      p.password === password
   );
 
   if (!user) {
-    return res.status(401).json({ error: "Invalid email or credentials" });
+    return res.status(401).json({ error: "Invalid email, username, or passcode credentials" });
   }
 
   // Generate a mock JWT/Token session
