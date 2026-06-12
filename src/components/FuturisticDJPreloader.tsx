@@ -13,6 +13,7 @@ export default function FuturisticDJPreloader({ onLoaded }: FuturisticDJPreloade
   const [fxMode, setFxMode] = useState<string>("FILTER");
 
   const soundPlayedRef = useRef(false);
+  const hasUserInteracted = useRef(false);
 
   // Compute state variables on-the-fly to prevent maximum update depth loop errors
   let systemState = "CALIBRATING JOG PLATTER...";
@@ -37,8 +38,12 @@ export default function FuturisticDJPreloader({ onLoaded }: FuturisticDJPreloade
 
   // Play a quick, clean synthesised notification sound on completion/load
   const playPulseSound = (frequency = 440, duration = 0.15) => {
+    if (!hasUserInteracted.current) return;
     try {
       const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      if (audioCtx.state === "suspended") {
+        return;
+      }
       const osc = audioCtx.createOscillator();
       const gain = audioCtx.createGain();
       osc.connect(gain);
@@ -134,6 +139,7 @@ export default function FuturisticDJPreloader({ onLoaded }: FuturisticDJPreloade
         <div 
           className="relative group cursor-pointer my-4"
           onMouseEnter={() => {
+            hasUserInteracted.current = true;
             setIsHovered(true);
             playPulseSound(330, 0.1); // Quick feedback tone
           }}
@@ -231,13 +237,21 @@ export default function FuturisticDJPreloader({ onLoaded }: FuturisticDJPreloade
           <div className="flex justify-between items-center text-[10px]">
             <div className="flex gap-2">
               <button 
-                onClick={() => { setActiveDeck("A"); playPulseSound(261.63, 0.15); }}
+                onClick={() => { 
+                  hasUserInteracted.current = true;
+                  setActiveDeck("A"); 
+                  playPulseSound(261.63, 0.15); 
+                }}
                 className={`px-3 py-1 border rounded-lg font-bold transition-all ${activeDeck === "A" ? "border-neon-cyan text-neon-cyan bg-neon-cyan/5" : "border-white/10 text-gray-500"}`}
               >
                 DECK A
               </button>
               <button 
-                onClick={() => { setActiveDeck("B"); playPulseSound(329.63, 0.15); }}
+                onClick={() => { 
+                  hasUserInteracted.current = true;
+                  setActiveDeck("B"); 
+                  playPulseSound(329.63, 0.15); 
+                }}
                 className={`px-3 py-1 border rounded-lg font-bold transition-all ${activeDeck === "B" ? "border-neon-purple text-neon-purple bg-neon-purple/5" : "border-white/10 text-gray-500"}`}
               >
                 DECK B
@@ -249,7 +263,11 @@ export default function FuturisticDJPreloader({ onLoaded }: FuturisticDJPreloade
               {["REVERB", "FILTER", "DELAY"].map((fx) => (
                 <span 
                   key={fx}
-                  onClick={() => { setFxMode(fx); playPulseSound(440, 0.08); }}
+                  onClick={() => { 
+                    hasUserInteracted.current = true;
+                    setFxMode(fx); 
+                    playPulseSound(440, 0.08); 
+                  }}
                   className={`cursor-pointer px-1.5 py-0.5 rounded transition-all ${fxMode === fx ? "text-white font-bold bg-white/10" : "hover:text-gray-300"}`}
                 >
                   {fx}
@@ -327,6 +345,7 @@ export default function FuturisticDJPreloader({ onLoaded }: FuturisticDJPreloade
                 animate={{ scale: 1, opacity: 1, y: 0 }}
                 exit={{ scale: 1.1, opacity: 0 }}
                 onClick={() => {
+                  hasUserInteracted.current = true;
                   playPulseSound(880, 0.4);
                   onLoaded();
                 }}
@@ -348,6 +367,7 @@ export default function FuturisticDJPreloader({ onLoaded }: FuturisticDJPreloade
                 </span>
                 <button
                   onClick={() => {
+                    hasUserInteracted.current = true;
                     setProgress(100);
                     playPulseSound(523.25, 0.25);
                   }}

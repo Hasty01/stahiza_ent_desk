@@ -188,11 +188,8 @@ export default function AdminDashboardView({
   const [formSuccess, setFormSuccess] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  // Handle image files selection and convert to Base64/Supabase Storage to upload
-  const handleFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
+  // Unified helper to handle file upload with automatic local sandbox fallback on Supabase error
+  const uploadFile = async (file: File) => {
     // Check size limit: 5MB
     if (file.size > 5 * 1024 * 1024) {
       setFormError("File exceeds 5MB container threshold limit!");
@@ -200,6 +197,52 @@ export default function AdminDashboardView({
     }
 
     setUploadLoading(true);
+
+    const uploadLocally = async () => {
+      setUploadProgress("Converting asset to data matrix...");
+      const reader = new FileReader();
+
+      return new Promise<void>((resolve, reject) => {
+        reader.readAsDataURL(file);
+        reader.onload = async () => {
+          const base64Data = reader.result as string;
+          setUploadProgress("Beaming file to server buckets...");
+
+          try {
+            const token = localStorage.getItem("stahiza_auth_token");
+            const response = await fetch("/api/upload", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${token}`
+              },
+              body: JSON.stringify({
+                base64Data,
+                filename: file.name
+              })
+            });
+
+            const data = await response.json();
+            if (!response.ok) {
+              throw new Error(data.error || "Uploader node denied transmission");
+            }
+
+            setEventImgUrl(data.url);
+            setFormSuccess("Media asset secured! Ready in pool preview.");
+            setTimeout(() => setFormSuccess(""), 4000);
+            resolve();
+          } catch (err: any) {
+            setFormError(err.message || "Failed to commit upload sequence");
+            setTimeout(() => setFormError(""), 5000);
+            reject(err);
+          }
+        };
+        reader.onerror = () => {
+          setFormError("FileReader malfunctioned on selected filesystem item");
+          reject(new Error("FileReader error"));
+        };
+      });
+    };
 
     if (isSupabaseConfigured && supabase) {
       setUploadProgress("Beaming file to Supabase storage bucket...");
@@ -229,74 +272,51 @@ export default function AdminDashboardView({
         setFormSuccess("Media asset secured in Supabase 'event-images' storage!");
         setTimeout(() => setFormSuccess(""), 4000);
       } catch (err: any) {
-        setFormError(err.message || "Failed to commit Supabase bucket upload");
-        setTimeout(() => setFormError(""), 5000);
+        console.warn("Supabase upload failed, falling back to local server storage:", err);
+        setUploadProgress("Supabase storage restriction. Re-routing locally...");
+        try {
+          await uploadLocally();
+        } catch (localErr: any) {
+          setFormError(`Supabase write failed: ${err.message || err}. Sandbox fallback also failed: ${localErr.message || localErr}`);
+          setTimeout(() => setFormError(""), 6000);
+        }
       } finally {
         setUploadLoading(false);
         setUploadProgress("");
       }
     } else {
-      setUploadProgress("Converting asset to data matrix...");
-      
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = async () => {
-        const base64Data = reader.result as string;
-        setUploadProgress("Beaming file to server buckets...");
-
-        try {
-          const token = localStorage.getItem("stahiza_auth_token");
-          const response = await fetch("/api/upload", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "Authorization": `Bearer ${token}`
-            },
-            body: JSON.stringify({
-              base64Data,
-              filename: file.name
-            })
-          });
-
-          const data = await response.json();
-          if (!response.ok) {
-            throw new Error(data.error || "Uploader node denied transmission");
-          }
-
-          setEventImgUrl(data.url);
-          setFormSuccess("Media asset secured! Ready in pool preview.");
-          setTimeout(() => setFormSuccess(""), 4000);
-        } catch (err: any) {
-          setFormError(err.message || "Failed to commit upload sequence");
-          setTimeout(() => setFormError(""), 5000);
-        } finally {
-          setUploadLoading(false);
-          setUploadProgress("");
-        }
-      };
-      reader.onerror = () => {
-        setFormError("FileReader malfunctioned on selected filesystem item");
+      try {
+        await uploadLocally();
+      } catch (err) {
+        // Handled in uploadLocally
+      } finally {
         setUploadLoading(false);
-      };
+        setUploadProgress("");
+      }
     }
+  };
+
+  // Handle image files selection and convert to Base64/Supabase Storage to upload
+  const handleFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    await uploadFile(file);
   };
 
   const handleDragOver = (e: DragEvent) => {
     e.preventDefault();
   };
 
-  const handleDrop = (e: DragEvent) => {
+  const handleDrop = async (e: DragEvent) => {
     e.preventDefault();
     const file = e.dataTransfer.files?.[0];
-    if (file && fileInputRef.current) {
-      const dataTransfer = new DataTransfer();
-      dataTransfer.items.add(file);
-      fileInputRef.current.files = dataTransfer.files;
-      
-      // Manually trigger change
-      const event = new Event("change", { bubbles: true }) as any;
-      fileInputRef.current.dispatchEvent(event);
-      handleFileChange(event);
+    if (file) {
+      if (fileInputRef.current) {
+        const dataTransfer = new DataTransfer();
+        dataTransfer.items.add(file);
+        fileInputRef.current.files = dataTransfer.files;
+      }
+      await uploadFile(file);
     }
   };
 
