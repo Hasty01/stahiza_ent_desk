@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  
+  <!-- Main Home Portal Vibe Hub -->
+  <url>
+    <loc>https://stahiza-ent-desk.vercel.app/</loc>
+    <lastmod>2026-06-12</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>1.00</priority>
+  </url>
+
+  <!-- Public Events Page Grid Matrix -->
+  <url>
+    <loc>https://stahiza-ent-desk.vercel.app/events</loc>
+    <lastmod>2026-06-12</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.90</priority>
+  </url>
+
+  <!-- Media Gallery & Photo Stream Grid -->
+  <url>
+    <loc>https://stahiza-ent-desk.vercel.app/gallery</loc>
+    <lastmod>2026-06-12</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.80</priority>
+  </url>
+
+  <!-- Live Student Shoutouts & Track Request Stream -->
+  <url>
+    <loc>https://stahiza-ent-desk.vercel.app/shoutouts</loc>
+    <lastmod>2026-06-12</lastmod>
+    <changefreq>always</changefreq>
+    <priority>0.80</priority>
+  </url>
+
+  <!-- Secure Committee Control Portals (Kept at lower priority for crawlers) -->
+  <url>
+    <loc>https://stahiza-ent-desk.vercel.app/admin/login</loc>
+    <lastmod>2026-06-12</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.30</priority>
+  </url>
+
+</urlset>
