@@ -1,6 +1,7 @@
 import { useState, FormEvent } from "react";
 import { Lock, Mail, ShieldAlert, Sparkles, Terminal } from "lucide-react";
 import { motion } from "motion/react";
+import { supabase, isSupabaseConfigured } from "../lib/supabase";
 
 interface AdminLoginViewProps {
   onLoginSuccess: (token: string, user: any) => void;
@@ -24,22 +25,58 @@ export default function AdminLoginView({ onLoginSuccess }: AdminLoginViewProps) 
 
     setIsSubmitting(true);
     try {
-      const response = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          email: email.trim(), 
-          password: password 
-        }),
-      });
+      if (isSupabaseConfigured && supabase) {
+        // Authenticate with real Supabase Auth
+        const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+          email: email.trim(),
+          password: password,
+        });
 
-      const data = await response.json();
+        if (authError) {
+          throw authError;
+        }
 
-      if (!response.ok) {
-        throw new Error(data.error || "Authentication denied by committee protocol");
+        if (!authData?.user) {
+          throw new Error("No user session returned from auth.");
+        }
+
+        // Real Committee Check (Phase 5)
+        const { data: profile, error: profileError } = await supabase
+          .from("committee_profiles")
+          .select("*")
+          .eq("id", authData.user.id)
+          .single();
+
+        if (profileError || !profile) {
+          // Sign out immediately to clear unprivileged sessions
+          await supabase.auth.signOut();
+          throw new Error("Clearance rejected: ID not listed in Committee Profiles database.");
+        }
+
+        onLoginSuccess(authData.session?.access_token || "supabase_session", {
+          id: profile.id,
+          full_name: profile.full_name || profile.name || authData.user.email,
+          role: profile.role || "Committee Member",
+          email: profile.email || authData.user.email
+        });
+      } else {
+        const response = await fetch("/api/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ 
+            email: email.trim(), 
+            password: password 
+          }),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || "Authentication denied by committee protocol");
+        }
+
+        onLoginSuccess(data.token, data.user);
       }
-
-      onLoginSuccess(data.token, data.user);
     } catch (e: any) {
       setErrorText(e?.message || "Connection refused: Server offline or rejected keys");
     } finally {

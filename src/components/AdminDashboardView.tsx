@@ -5,6 +5,7 @@ import {
   Check, X, Megaphone, MapPin, Music, HelpCircle 
 } from "lucide-react";
 import { StahizaEvent, Shoutout } from "../types";
+import { supabase, isSupabaseConfigured } from "../lib/supabase";
 
 interface AdminDashboardProps {
   events: StahizaEvent[];
@@ -46,7 +47,7 @@ export default function AdminDashboardView({
   const [formSuccess, setFormSuccess] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  // Handle image files selection and convert to Base64 to upload
+  // Handle image files selection and convert to Base64/Supabase Storage to upload
   const handleFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -58,48 +59,85 @@ export default function AdminDashboardView({
     }
 
     setUploadLoading(true);
-    setUploadProgress("Converting asset to data matrix...");
-    
-    const reader = new FileReader();
-    reader.readAsDataURL(file);
-    reader.onload = async () => {
-      const base64Data = reader.result as string;
-      setUploadProgress("Beaming file to server buckets...");
 
+    if (isSupabaseConfigured && supabase) {
+      setUploadProgress("Beaming file to Supabase storage bucket...");
       try {
-        const token = localStorage.getItem("stahiza_auth_token");
-        const response = await fetch("/api/upload", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${token}`
-          },
-          body: JSON.stringify({
-            base64Data,
-            filename: file.name
-          })
-        });
+        const fileName = `${Date.now()}-${file.name}`;
+        
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from("event-images")
+          .upload(fileName, file, {
+            cacheControl: "3600",
+            upsert: false
+          });
 
-        const data = await response.json();
-        if (!response.ok) {
-          throw new Error(data.error || "Uploader node denied transmission");
+        if (uploadError) {
+          throw uploadError;
         }
 
-        setEventImgUrl(data.url);
-        setFormSuccess("Media asset secured! Ready in pool preview.");
+        const { data: publicUrlData } = supabase.storage
+          .from("event-images")
+          .getPublicUrl(fileName);
+
+        if (!publicUrlData || !publicUrlData.publicUrl) {
+          throw new Error("Unable to resolve public URL for resource.");
+        }
+
+        setEventImgUrl(publicUrlData.publicUrl);
+        setFormSuccess("Media asset secured in Supabase 'event-images' storage!");
         setTimeout(() => setFormSuccess(""), 4000);
       } catch (err: any) {
-        setFormError(err.message || "Failed to commit upload sequence");
+        setFormError(err.message || "Failed to commit Supabase bucket upload");
         setTimeout(() => setFormError(""), 5000);
       } finally {
         setUploadLoading(false);
         setUploadProgress("");
       }
-    };
-    reader.onerror = () => {
-      setFormError("FileReader malfunctioned on selected filesystem item");
-      setUploadLoading(false);
-    };
+    } else {
+      setUploadProgress("Converting asset to data matrix...");
+      
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = async () => {
+        const base64Data = reader.result as string;
+        setUploadProgress("Beaming file to server buckets...");
+
+        try {
+          const token = localStorage.getItem("stahiza_auth_token");
+          const response = await fetch("/api/upload", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${token}`
+            },
+            body: JSON.stringify({
+              base64Data,
+              filename: file.name
+            })
+          });
+
+          const data = await response.json();
+          if (!response.ok) {
+            throw new Error(data.error || "Uploader node denied transmission");
+          }
+
+          setEventImgUrl(data.url);
+          setFormSuccess("Media asset secured! Ready in pool preview.");
+          setTimeout(() => setFormSuccess(""), 4000);
+        } catch (err: any) {
+          setFormError(err.message || "Failed to commit upload sequence");
+          setTimeout(() => setFormError(""), 5000);
+        } finally {
+          setUploadLoading(false);
+          setUploadProgress("");
+        }
+      };
+      reader.onerror = () => {
+        setFormError("FileReader malfunctioned on selected filesystem item");
+        setUploadLoading(false);
+      };
+    }
   };
 
   const handleDragOver = (e: DragEvent) => {

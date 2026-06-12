@@ -11,6 +11,7 @@ import Toast, { ToastMessage } from "./components/Toast";
 import { StahizaEvent, Shoutout, GalleryImage } from "./types";
 import { Terminal, ShieldCheck, Mail, Sparkles, AlertCircle } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
+import { supabase, isSupabaseConfigured } from "./lib/supabase";
 
 export default function App() {
   const [currentView, setCurrentView] = useState<string>("home");
@@ -42,12 +43,35 @@ export default function App() {
     const initializeData = async () => {
       setLoading(true);
       try {
-        // Fetch all components concurrently
-        const [eventsRes, shoutsRes, galRes] = await Promise.all([
-          fetch("/api/events").then(r => r.json()),
-          fetch("/api/shoutouts").then(r => r.json()),
-          fetch("/api/gallery").then(r => r.json())
-        ]);
+        let eventsRes: StahizaEvent[] = [];
+        let shoutsRes: Shoutout[] = [];
+        let galRes: GalleryImage[] = [];
+
+        if (isSupabaseConfigured && supabase) {
+          const [evResp, shResp, gaResp] = await Promise.all([
+            supabase.from("events").select("*").order("date", { ascending: true }),
+            supabase.from("shoutouts").select("*").order("created_at", { ascending: false }),
+            supabase.from("gallery").select("*").order("created_at", { ascending: false })
+          ]);
+
+          if (evResp.error) throw evResp.error;
+          if (shResp.error) throw shResp.error;
+          if (gaResp.error) throw gaResp.error;
+
+          eventsRes = evResp.data || [];
+          shoutsRes = shResp.data || [];
+          galRes = gaResp.data || [];
+        } else {
+          // Fetch from standard fallback Express backend
+          const [evData, shData, galData] = await Promise.all([
+            fetch("/api/events").then(r => r.json()),
+            fetch("/api/shoutouts").then(r => r.json()),
+            fetch("/api/gallery").then(r => r.json())
+          ]);
+          eventsRes = evData;
+          shoutsRes = shData;
+          galRes = galData;
+        }
 
         setEvents(eventsRes);
         setShoutouts(shoutsRes);
@@ -120,23 +144,42 @@ export default function App() {
   // 3. Public Submit Shoutout function
   const handleAddShoutout = async (studentName: string, message: string, songRequest?: string): Promise<boolean> => {
     try {
-      const res = await fetch("/api/shoutouts", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ student_name: studentName, message, song_request: songRequest }),
-      });
+      const payload = {
+        student_name: studentName,
+        message,
+        song_request: songRequest || "",
+        created_at: new Date().toISOString()
+      };
 
-      if (!res.ok) {
-        throw new Error();
+      if (isSupabaseConfigured && supabase) {
+        const { data, error } = await supabase
+          .from("shoutouts")
+          .insert([payload])
+          .select()
+          .single();
+
+        if (error) throw error;
+        const newShoutout = data || payload;
+        setShoutouts((prevshout) => [newShoutout, ...prevshout]);
+      } else {
+        const res = await fetch("/api/shoutouts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ student_name: studentName, message, song_request: songRequest }),
+        });
+
+        if (!res.ok) {
+          throw new Error();
+        }
+
+        const newShoutout = await res.json();
+        setShoutouts((prevshout) => [newShoutout, ...prevshout]);
       }
 
-      const newShoutout = await res.json();
-      // Add immediately to local state so the board updates nicely
-      setShoutouts((prevshout) => [newShoutout, ...prevshout]);
       addToast("Signal broadcasted successfully!", "success");
       return true;
     } catch (err) {
-      addToast("Network drop. Failed to deliver transmission.", "error");
+      addToast("Failed to deliver transmission.", "error");
       return false;
     }
   };
@@ -144,40 +187,77 @@ export default function App() {
   // 4. Admin Database Operations: CREATE Event
   const handleCreateEvent = async (title: string, date: string, description: string, imageUrl: string): Promise<boolean> => {
     try {
-      const token = localStorage.getItem("stahiza_auth_token");
-      const res = await fetch("/api/events", {
-        method: "POST",
-        headers: { 
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`
-        },
-        body: JSON.stringify({ title, date, description, image_url: imageUrl }),
-      });
+      const payload = {
+        title,
+        date,
+        description,
+        image_url: imageUrl || "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?auto=format&fit=crop&q=80&w=800"
+      };
 
-      if (!res.ok) {
-        throw new Error();
-      }
+      let newEvent;
 
-      const newEvent = await res.json();
-      setEvents((prev) => [newEvent, ...prev]);
-      
-      // Concurrently add this image to the Gallery is standard fun UX for Stahiza
-      if (imageUrl) {
-        try {
-          const galRes = await fetch("/api/gallery", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "Authorization": `Bearer ${token}`
-            },
-            body: JSON.stringify({ url: imageUrl, caption: `Flyer: ${title}` })
-          });
-          if (galRes.ok) {
-            const newImg = await galRes.json();
-            setGallery((prev) => [newImg, ...prev]);
+      if (isSupabaseConfigured && supabase) {
+        const { data, error } = await supabase
+          .from("events")
+          .insert([payload])
+          .select()
+          .single();
+
+        if (error) throw error;
+        newEvent = data || payload;
+        setEvents((prev) => [newEvent, ...prev]);
+
+        // Sync image to gallery if configured
+        if (imageUrl) {
+          try {
+            const { data: galData, error: galErr } = await supabase
+              .from("gallery")
+              .insert([{ url: imageUrl, caption: `Flyer: ${title}`, created_at: new Date().toISOString() }])
+              .select()
+              .single();
+            if (!galErr && galData) {
+              setGallery((prev) => [galData, ...prev]);
+            }
+          } catch (e) {
+            console.error("Gallery sync ignored", e);
           }
-        } catch (e) {
-          console.error("Gallery sync ignored", e);
+        }
+      } else {
+        const token = localStorage.getItem("stahiza_auth_token");
+        const res = await fetch("/api/events", {
+          method: "POST",
+          headers: { 
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${token}`
+          },
+          body: JSON.stringify(payload),
+        });
+
+        if (!res.ok) {
+          throw new Error();
+        }
+
+        newEvent = await res.json();
+        setEvents((prev) => [newEvent, ...prev]);
+        
+        // Sync gallery fallback
+        if (imageUrl) {
+          try {
+            const galRes = await fetch("/api/gallery", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${token}`
+              },
+              body: JSON.stringify({ url: imageUrl, caption: `Flyer: ${title}` })
+            });
+            if (galRes.ok) {
+              const newImg = await galRes.json();
+              setGallery((prev) => [newImg, ...prev]);
+            }
+          } catch (e) {
+            console.error("Gallery sync ignored", e);
+          }
         }
       }
 
@@ -192,22 +272,36 @@ export default function App() {
   // 5. Admin Database Operations: EDIT Event
   const handleEditEvent = async (id: string, title: string, date: string, description: string, imageUrl: string): Promise<boolean> => {
     try {
-      const token = localStorage.getItem("stahiza_auth_token");
-      const res = await fetch(`/api/events/${id}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`
-        },
-        body: JSON.stringify({ title, date, description, image_url: imageUrl }),
-      });
+      if (isSupabaseConfigured && supabase) {
+        const { data, error } = await supabase
+          .from("events")
+          .update({ title, date, description, image_url: imageUrl })
+          .eq("id", id)
+          .select()
+          .single();
 
-      if (!res.ok) {
-        throw new Error();
+        if (error) throw error;
+        const updated = data || { id, title, date, description, image_url: imageUrl };
+        setEvents((prev) => prev.map((e) => (e.id === id ? updated : e)));
+      } else {
+        const token = localStorage.getItem("stahiza_auth_token");
+        const res = await fetch(`/api/events/${id}`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${token}`
+          },
+          body: JSON.stringify({ title, date, description, image_url: imageUrl }),
+        });
+
+        if (!res.ok) {
+          throw new Error();
+        }
+
+        const updated = await res.json();
+        setEvents((prev) => prev.map((e) => (e.id === id ? updated : e)));
       }
 
-      const updated = await res.json();
-      setEvents((prev) => prev.map((e) => (e.id === id ? updated : e)));
       addToast("Central event parameters altered of record.", "success");
       return true;
     } catch (err) {
@@ -219,14 +313,23 @@ export default function App() {
   // 6. Admin Database Operations: DELETE Event
   const handleDeleteEvent = async (id: string): Promise<boolean> => {
     try {
-      const token = localStorage.getItem("stahiza_auth_token");
-      const res = await fetch(`/api/events/${id}`, {
-        method: "DELETE",
-        headers: { "Authorization": `Bearer ${token}` },
-      });
+      if (isSupabaseConfigured && supabase) {
+        const { error } = await supabase
+          .from("events")
+          .delete()
+          .eq("id", id);
 
-      if (!res.ok) {
-        throw new Error();
+        if (error) throw error;
+      } else {
+        const token = localStorage.getItem("stahiza_auth_token");
+        const res = await fetch(`/api/events/${id}`, {
+          method: "DELETE",
+          headers: { "Authorization": `Bearer ${token}` },
+        });
+
+        if (!res.ok) {
+          throw new Error();
+        }
       }
 
       setEvents((prev) => prev.filter((e) => e.id !== id));
@@ -241,14 +344,23 @@ export default function App() {
   // 7. Admin Database Operations: DELETE Inappropriate Shoutout
   const handleDeleteShoutout = async (id: string): Promise<boolean> => {
     try {
-      const token = localStorage.getItem("stahiza_auth_token");
-      const res = await fetch(`/api/shoutouts/${id}`, {
-        method: "DELETE",
-        headers: { "Authorization": `Bearer ${token}` },
-      });
+      if (isSupabaseConfigured && supabase) {
+        const { error } = await supabase
+          .from("shoutouts")
+          .delete()
+          .eq("id", id);
 
-      if (!res.ok) {
-        throw new Error();
+        if (error) throw error;
+      } else {
+        const token = localStorage.getItem("stahiza_auth_token");
+        const res = await fetch(`/api/shoutouts/${id}`, {
+          method: "DELETE",
+          headers: { "Authorization": `Bearer ${token}` },
+        });
+
+        if (!res.ok) {
+          throw new Error();
+        }
       }
 
       setShoutouts((prev) => prev.filter((s) => s.id !== id));
