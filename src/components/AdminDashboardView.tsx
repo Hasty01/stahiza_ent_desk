@@ -71,6 +71,10 @@ export default function AdminDashboardView({
   };
 
   useEffect(() => {
+    fetchProfiles();
+  }, []);
+
+  useEffect(() => {
     if (activeTab === "approvals") {
       fetchProfiles();
     }
@@ -400,6 +404,88 @@ export default function AdminDashboardView({
           <LogOut className="w-4 h-4" />
           Terminate Session
         </button>
+      </section>
+
+      {/* SUMMARY STATS MATRIX WIDGET */}
+      <section id="terminal-stats-widget" className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        
+        {/* TOTAL GATHERINGS CARD */}
+        <div 
+          onClick={() => setActiveTab("events")}
+          className="group relative bg-dark-card border border-dark-border/70 hover:border-neon-purple/45 rounded-2xl p-5 flex items-center justify-between transition-all duration-300 cursor-pointer overflow-hidden bg-dot-matrix"
+        >
+          <div className="absolute inset-0 bg-gradient-to-br from-neon-purple/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
+          <div className="space-y-1 relative z-10">
+            <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-gray-500 group-hover:text-neon-purple-hover transition-colors">
+              Total Gatherings
+            </span>
+            <div className="text-3xl font-display font-black text-white group-hover:scale-[1.02] origin-left transition-transform">
+              {events.length}
+            </div>
+            <p className="text-[10px] text-gray-400 font-mono">
+              Live scheduled activities
+            </p>
+          </div>
+          <div className="p-3 bg-neon-purple/5 group-hover:bg-neon-purple/15 text-neon-purple/90 rounded-xl transition-all duration-300 relative z-10">
+            <Calendar className="w-6 h-6" />
+          </div>
+        </div>
+
+        {/* ACTIVE SHOUTOUT STREAM CARD */}
+        <div 
+          onClick={() => setActiveTab("shoutouts")}
+          className="group relative bg-dark-card border border-dark-border/70 hover:border-neon-cyan/45 rounded-2xl p-5 flex items-center justify-between transition-all duration-300 cursor-pointer overflow-hidden bg-dot-matrix"
+        >
+          <div className="absolute inset-0 bg-gradient-to-br from-neon-cyan/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
+          <div className="space-y-1 relative z-10">
+            <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-gray-500 group-hover:text-neon-cyan transition-colors">
+              Shoutout Stream
+            </span>
+            <div className="text-3xl font-display font-black text-white group-hover:scale-[1.02] origin-left transition-transform">
+              {shoutouts.length}
+            </div>
+            <p className="text-[10px] text-gray-400 font-mono">
+              Unmoderated feed broadcast
+            </p>
+          </div>
+          <div className="p-3 bg-neon-cyan/5 group-hover:bg-neon-cyan/15 text-neon-cyan rounded-xl transition-all duration-300 relative z-10">
+            <Megaphone className="w-6 h-6" />
+          </div>
+        </div>
+
+        {/* PROFILE CLEARANCE DESK CARD */}
+        <div 
+          onClick={() => setActiveTab("approvals")}
+          className="group relative bg-dark-card border border-dark-border/70 hover:border-neon-pink/45 rounded-2xl p-5 flex items-center justify-between transition-all duration-300 cursor-pointer overflow-hidden bg-dot-matrix"
+        >
+          <div className="absolute inset-0 bg-gradient-to-br from-neon-pink/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
+          <div className="space-y-1 relative z-10">
+            <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-gray-500 group-hover:text-neon-pink transition-colors">
+              Clearance Gateway
+            </span>
+            <div className="flex items-center gap-2">
+              <div className="text-3xl font-display font-black text-white group-hover:scale-[1.02] origin-left transition-transform">
+                {profiles.filter((p) => p.approved === false).length}
+              </div>
+              {profiles.filter((p) => p.approved === false).length > 0 && (
+                <span className="px-1.5 py-0.5 bg-neon-pink/15 border border-neon-pink/35 text-[9px] font-mono font-bold text-neon-pink rounded animate-pulse">
+                  ACTION REQ
+                </span>
+              )}
+            </div>
+            <p className="text-[10px] text-gray-400 font-mono">
+              Pending crew applicants
+            </p>
+          </div>
+          <div className={`p-3 rounded-xl transition-all duration-300 relative z-10 ${
+            profiles.filter((p) => p.approved === false).length > 0
+              ? "bg-neon-pink/15 text-neon-pink animate-bounce"
+              : "bg-gray-500/5 group-hover:bg-neon-pink/10 text-gray-400 group-hover:text-neon-pink"
+          }`}>
+            <Users className="w-6 h-6" />
+          </div>
+        </div>
+
       </section>
 
       {/* DASH NAVIGATION TABS */}
