@@ -80,7 +80,7 @@ export default function HomeView({ events, shoutouts, gallery, onNavigate }: Hom
             className="inline-flex items-center gap-2 px-3 py-1 bg-neon-purple/10 border border-neon-purple/30 rounded-full text-xs font-mono text-neon-purple-hover"
           >
             <Sparkles className="w-3.5 h-3.5 text-neon-purple animate-pulse" />
-            STAHIZA Entertainment Protocol v1.4.2
+            STAHIZA ENT DESK
           </motion.div>
 
           <motion.h2 

@@ -63,7 +63,8 @@ function seedData() {
       username: "joel",
       role: "STAHIZA Entertainment President",
       email: "admin@stahiza.edu",
-      password: "admin" // For testing
+      password: "admin", // For testing
+      approved: true
     },
     {
       id: "comm-2",
@@ -71,7 +72,8 @@ function seedData() {
       username: "nicoletta",
       role: "Graphics Coordinator & DJ Lead",
       email: "hastyjoel1@gmail.com",
-      password: "admin" // For testing
+      password: "admin", // For testing
+      approved: true
     }
   ];
 
@@ -159,7 +161,45 @@ app.use("/uploads", express.static(UPLOADS_DIR));
 // API ROUTES
 // ----------------------------------------------------
 
-// 1. Auth Login Endpoint
+// 1. Auth Register Endpoint (Pending admin approval by default)
+app.post("/api/auth/register", (req, res) => {
+  const { email, username, password, fullName, role } = req.body;
+  if (!email || !username || !password || !fullName || !role) {
+    return res.status(400).json({ error: "Registration details incomplete. Ensure all fields are filled." });
+  }
+
+  const profiles = readData<any[]>("committee_profiles.json", []);
+  const emailLower = email.trim().toLowerCase();
+  const usernameLower = username.trim().toLowerCase();
+
+  const exists = profiles.some(
+    (p) => p.email.toLowerCase() === emailLower || (p.username && p.username.toLowerCase() === usernameLower)
+  );
+
+  if (exists) {
+    return res.status(400).json({ error: "An account with this email address or username already exists in the system." });
+  }
+
+  const newProfile = {
+    id: "comm-" + Math.random().toString(36).substring(2, 11),
+    full_name: fullName.trim(),
+    username: usernameLower,
+    role: role.trim(),
+    email: email.trim(),
+    password: password,
+    approved: false // Requires admin check
+  };
+
+  profiles.push(newProfile);
+  writeData("committee_profiles.json", profiles);
+
+  return res.status(201).json({
+    success: true,
+    message: "Clearance pending: Your registration is logged. An administrator must verify and approve it before you can log in."
+  });
+});
+
+// 2. Auth Login Endpoint
 app.post("/api/auth/login", (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) {
@@ -179,13 +219,19 @@ app.post("/api/auth/login", (req, res) => {
     return res.status(401).json({ error: "Invalid email, username, or passcode credentials" });
   }
 
+  // Admin Approval Check
+  if (user.approved === false) {
+    return res.status(403).json({ error: "Clearance rejected: Your profile is pending Administrator approval." });
+  }
+
   // Generate a mock JWT/Token session
   const token = Buffer.from(JSON.stringify({ id: user.id, email: user.email, time: Date.now() })).toString("base64");
   const userResponse = {
     id: user.id,
     full_name: user.full_name,
     role: user.role,
-    email: user.email
+    email: user.email,
+    approved: user.approved !== false
   };
 
   return res.json({ token, user: userResponse });
@@ -210,6 +256,10 @@ const authMiddleware = (req: any, res: any, next: any) => {
       return res.status(401).json({ error: "User session expired or invalid profile" });
     }
 
+    if (user.approved === false) {
+      return res.status(403).json({ error: "Account access suspended or unapproved." });
+    }
+
     req.user = user;
     next();
   } catch (err) {
@@ -223,8 +273,50 @@ app.get("/api/auth/profile", authMiddleware, (req: any, res) => {
     id: req.user.id,
     full_name: req.user.full_name,
     role: req.user.role,
-    email: req.user.email
+    email: req.user.email,
+    approved: req.user.approved !== false
   });
+});
+
+// Profiles Management Endpoints (Only accessible by Authenticated Operators)
+app.get("/api/profiles", authMiddleware, (req: any, res) => {
+  const profiles = readData<any[]>("committee_profiles.json", []);
+  const sanitized = profiles.map(({ password, ...rest }) => rest);
+  res.json(sanitized);
+});
+
+app.post("/api/profiles/:id/approve", authMiddleware, (req: any, res) => {
+  const { id } = req.params;
+  const profiles = readData<any[]>("committee_profiles.json", []);
+  const idx = profiles.findIndex((p) => p.id === id);
+
+  if (idx === -1) {
+    return res.status(404).json({ error: "Committee profile not found." });
+  }
+
+  profiles[idx].approved = true;
+  writeData("committee_profiles.json", profiles);
+
+  res.json({ success: true, message: `Account approval verified for ${profiles[idx].full_name}` });
+});
+
+app.delete("/api/profiles/:id", authMiddleware, (req: any, res) => {
+  const { id } = req.params;
+  if (id === req.user.id) {
+    return res.status(400).json({ error: "Operator safety protocol: You cannot purge your active profile." });
+  }
+
+  let profiles = readData<any[]>("committee_profiles.json", []);
+  const exists = profiles.some((p) => p.id === id);
+
+  if (!exists) {
+    return res.status(404).json({ error: "Committee profile not found." });
+  }
+
+  profiles = profiles.filter((p) => p.id !== id);
+  writeData("committee_profiles.json", profiles);
+
+  res.json({ success: true, message: "Profile request purged from system log successfully." });
 });
 
 // 2. Events Endpoints

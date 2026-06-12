@@ -83,8 +83,25 @@ export default function AdminLoginView({ onLoginSuccess }: AdminLoginViewProps) 
           }, 8000);
           
         } else {
-          // Fallback simulation
-          setSuccessText("Account request simulated! An Administrator must approve your registration details before you can establish a session.");
+          // Connect to real registration backend API endpoint
+          const response = await fetch("/api/auth/register", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              email: email.trim(),
+              username: username.trim().toLowerCase(),
+              password: password,
+              fullName: fullName.trim(),
+              role: role.trim()
+            })
+          });
+
+          const data = await response.json();
+          if (!response.ok) {
+            throw new Error(data.error || "Failed to submit registration request to control server.");
+          }
+
+          setSuccessText(data.message || "Account request submitted! An Administrator must approve your registration details before you can establish a session.");
           setEmail("");
           setUsername("");
           setPassword("");
@@ -93,7 +110,7 @@ export default function AdminLoginView({ onLoginSuccess }: AdminLoginViewProps) 
           setTimeout(() => {
             setMode("login");
             setSuccessText("");
-          }, 6000);
+          }, 8500);
         }
       } catch (err: any) {
         setErrorText(err?.message || "Failed to submit registration request.");

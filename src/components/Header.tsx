@@ -30,9 +30,13 @@ export default function Header({ currentView, onNavigate, adminUser, onLogout }:
           onClick={() => onNavigate("home")} 
           className="flex items-center gap-3 cursor-pointer group"
         >
-          <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-purple-600 to-cyan-500 flex items-center justify-center shadow-[0_0_20px_rgba(168,85,247,0.4)] transition-transform group-hover:scale-105">
-            <span className="font-black text-xl text-white">S</span>
-          </div>
+          <img 
+            id="finite-logo-img"
+            src="/finite-logo.png" 
+            alt="STAHIZA Logo" 
+            referrerPolicy="no-referrer"
+            className="w-10 h-10 rounded-lg object-cover shadow-[0_0_20px_rgba(59,130,246,0.4)] transition-transform group-hover:scale-105"
+          />
           <div>
             <h1 className="text-xl font-black tracking-tighter leading-none text-white">
               STAHIZA <span className="text-cyan-400 font-normal italic">ENT DESK</span>

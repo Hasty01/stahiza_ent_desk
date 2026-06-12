@@ -5,7 +5,8 @@
     "username": "joel",
     "role": "STAHIZA Entertainment President",
     "email": "admin@stahiza.edu",
-    "password": "admin"
+    "password": "admin",
+    "approved": true
   },
   {
     "id": "comm-2",
@@ -13,6 +14,7 @@
     "username": "nicoletta",
     "role": "Graphics Coordinator & DJ Lead",
     "email": "hastyjoel1@gmail.com",
-    "password": "admin"
+    "password": "admin",
+    "approved": true
   }
 ]
