@@ -1,0 +1,6 @@
+{
+  "name": "STAHIZA Ent Desk",
+  "description": "STAHIZA Ent Desk: Official school entertainment platform for event tracking, media galleries, and safe student shoutouts.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
