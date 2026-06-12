@@ -4,32 +4,38 @@ import {
   Upload, Sparkles, Terminal, FileImage, ClipboardList, 
   Check, X, Megaphone, MapPin, Music, HelpCircle, Users, UserCheck 
 } from "lucide-react";
-import { StahizaEvent, Shoutout } from "../types";
+import { StahizaEvent, Shoutout, GalleryImage } from "../types";
 import { supabase, isSupabaseConfigured } from "../lib/supabase";
 import ApprovalQueue from "./ApprovalQueue";
 
 interface AdminDashboardProps {
   events: StahizaEvent[];
   shoutouts: Shoutout[];
+  gallery: GalleryImage[];
   adminUser: any;
   onLogout: () => void;
   onCreateEvent: (title: string, date: string, description: string, imageUrl: string) => Promise<boolean>;
   onEditEvent: (id: string, title: string, date: string, description: string, imageUrl: string) => Promise<boolean>;
   onDeleteEvent: (id: string) => Promise<boolean>;
   onDeleteShoutout: (id: string) => Promise<boolean>;
+  onAddGalleryImage: (url: string, caption: string) => Promise<boolean>;
+  onDeleteGalleryImage: (id: string) => Promise<boolean>;
 }
 
 export default function AdminDashboardView({
   events,
   shoutouts,
+  gallery,
   adminUser,
   onLogout,
   onCreateEvent,
   onEditEvent,
   onDeleteEvent,
-  onDeleteShoutout
+  onDeleteShoutout,
+  onAddGalleryImage,
+  onDeleteGalleryImage
 }: AdminDashboardProps) {
-  const [activeTab, setActiveTab] = useState<"events" | "shoutouts" | "approvals">("events");
+  const [activeTab, setActiveTab] = useState<"events" | "shoutouts" | "approvals" | "gallery">("events");
 
   // Profile approvals states
   const [profiles, setProfiles] = useState<any[]>([]);
@@ -182,6 +188,172 @@ export default function AdminDashboardView({
   const [uploadLoading, setUploadLoading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Gallery Management form states
+  const [galleryCaption, setGalleryCaption] = useState("");
+  const [galleryImgUrl, setGalleryImgUrl] = useState("");
+  const [galleryUploadProgress, setGalleryUploadProgress] = useState("");
+  const [galleryUploadLoading, setGalleryUploadLoading] = useState(false);
+  const galleryFileInputRef = useRef<HTMLInputElement>(null);
+
+  const uploadGalleryFile = async (file: File) => {
+    if (file.size > 5 * 1024 * 1024) {
+      setFormError("File exceeds 5MB limit threshold!");
+      return;
+    }
+    setGalleryUploadLoading(true);
+
+    const uploadLocally = async () => {
+      setGalleryUploadProgress("Converting asset...");
+      const reader = new FileReader();
+
+      return new Promise<void>((resolve, reject) => {
+        reader.readAsDataURL(file);
+        reader.onload = async () => {
+          const base64Data = reader.result as string;
+          setGalleryUploadProgress("Beaming to sandbox...");
+
+          try {
+            const token = localStorage.getItem("stahiza_auth_token");
+            const response = await fetch("/api/upload", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${token}`
+              },
+              body: JSON.stringify({
+                base64Data,
+                filename: file.name
+              })
+            });
+
+            const data = await response.json();
+            if (!response.ok) {
+              throw new Error(data.error || "Uploader node denied transmission");
+            }
+
+            setGalleryImgUrl(data.url);
+            setFormSuccess("Gallery image ready in pool preview!");
+            setTimeout(() => setFormSuccess(""), 4000);
+            resolve();
+          } catch (err: any) {
+            setFormError(err.message || "Failed local upload sequence");
+            setTimeout(() => setFormError(""), 5000);
+            reject(err);
+          }
+        };
+        reader.onerror = () => {
+          setFormError("FileReader error on active asset");
+          reject(new Error("FileReader error"));
+        };
+      });
+    };
+
+    if (isSupabaseConfigured && supabase) {
+      setGalleryUploadProgress("Uploading to Supabase bucket 'event-images'...");
+      try {
+        const fileName = `gal-${Date.now()}-${file.name}`;
+        
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from("event-images")
+          .upload(fileName, file, {
+            cacheControl: "3600",
+            upsert: false
+          });
+
+        if (uploadError) {
+          throw uploadError;
+        }
+
+        const { data: publicUrlData } = supabase.storage
+          .from("event-images")
+          .getPublicUrl(fileName);
+
+        if (!publicUrlData || !publicUrlData.publicUrl) {
+          throw new Error("Unable to resolve public URL.");
+        }
+
+        setGalleryImgUrl(publicUrlData.publicUrl);
+        setFormSuccess("Gallery image upload succeeded in Supabase storage!");
+        setTimeout(() => setFormSuccess(""), 4000);
+      } catch (err: any) {
+        console.warn("Supabase upload failed, falling back to local server storage:", err);
+        setGalleryUploadProgress("Supabase storage restriction. Re-routing...");
+        try {
+          await uploadLocally();
+        } catch (localErr: any) {
+          setFormError(`Supabase write failed: ${err.message || err}. Sandbox fallback also failed: ${localErr.message || localErr}`);
+          setTimeout(() => setFormError(""), 6000);
+        }
+      } finally {
+        setGalleryUploadLoading(false);
+        setGalleryUploadProgress("");
+      }
+    } else {
+      try {
+        await uploadLocally();
+      } catch (err) {
+        // Handled in uploadLocally
+      } finally {
+        setGalleryUploadLoading(false);
+        setGalleryUploadProgress("");
+      }
+    }
+  };
+
+  const handleGalleryFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    await uploadGalleryFile(file);
+  };
+
+  const handleGalleryDragOver = (e: DragEvent) => {
+    e.preventDefault();
+  };
+
+  const handleGalleryDrop = async (e: DragEvent) => {
+    e.preventDefault();
+    const file = e.dataTransfer.files?.[0];
+    if (file) {
+      if (galleryFileInputRef.current) {
+        const dataTransfer = new DataTransfer();
+        dataTransfer.items.add(file);
+        galleryFileInputRef.current.files = dataTransfer.files;
+      }
+      await uploadGalleryFile(file);
+    }
+  };
+
+  const handleGallerySubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    setFormError("");
+    setFormSuccess("");
+
+    if (!galleryImgUrl) {
+      setFormError("Visual source URL/File is required");
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const success = await onAddGalleryImage(galleryImgUrl, galleryCaption.trim() || undefined);
+      if (success) {
+        setFormSuccess("Gallery image successfully deployed to Student Visual Deck!");
+        setGalleryCaption("");
+        setGalleryImgUrl("");
+        if (galleryFileInputRef.current) {
+          galleryFileInputRef.current.value = "";
+        }
+        setTimeout(() => setFormSuccess(""), 4000);
+      } else {
+        setFormError("Server rejected deployment command");
+      }
+    } catch (err: any) {
+      setFormError(err.message || "Failed to commit upload transaction");
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   // General log states
   const [formError, setFormError] = useState("");
@@ -509,7 +681,7 @@ export default function AdminDashboardView({
       </section>
 
       {/* DASH NAVIGATION TABS */}
-      <div className="flex flex-wrap bg-dark-card p-1.5 rounded-2xl border border-dark-border self-start gap-1 sm:gap-0 max-w-2xl">
+      <div className="flex flex-wrap bg-dark-card p-1.5 rounded-2xl border border-dark-border self-start gap-1 sm:gap-0 max-w-3xl">
         <button
           onClick={() => setActiveTab("events")}
           className={`flex-1 py-2.5 px-5 rounded-xl font-mono text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all min-w-[140px] ${
@@ -543,6 +715,17 @@ export default function AdminDashboardView({
         >
           <Users className="w-4 h-4" />
           Desk Approvals ({profiles.filter((p) => p.approved === false).length})
+        </button>
+        <button
+          onClick={() => setActiveTab("gallery")}
+          className={`flex-1 py-2.5 px-5 rounded-xl font-mono text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all min-w-[140px] ${
+            activeTab === "gallery"
+              ? "bg-neon-purple text-white shadow-md shadow-neon-purple/30"
+              : "text-gray-400 hover:text-white"
+          }`}
+        >
+          <FileImage className="w-4 h-4" />
+          Gallery Grid ({gallery.length})
         </button>
       </div>
 
@@ -852,7 +1035,7 @@ export default function AdminDashboardView({
             </div>
           )}
         </div>
-      ) : (
+      ) : activeTab === "approvals" ? (
         /* DESK APPROVALS MODULE */
         <div id="desk-approvals-console" className="space-y-8">
           
@@ -861,6 +1044,163 @@ export default function AdminDashboardView({
             onRefreshParent={fetchProfiles} 
             adminUserId={adminUser.id} 
           />
+
+        </div>
+      ) : (
+        /* GALLERY GRID MANAGER MODULE */
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+          
+          {/* UPLOAD PANEL */}
+          <div className="lg:col-span-4 bg-dark-card border border-dark-border rounded-3xl p-6 relative space-y-6">
+            <h3 className="font-display font-extrabold text-lg text-white flex items-center gap-2">
+              <Upload className="w-4.5 h-4.5 text-neon-purple-hover" />
+              Broadcast to Gallery
+            </h3>
+
+            <form onSubmit={handleGallerySubmit} className="space-y-4">
+              {/* Caption */}
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-mono font-bold uppercase tracking-widest text-gray-400 block">
+                  Image Caption / Vibe Title
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. DJ Crew rocking the dance floor"
+                  value={galleryCaption}
+                  onChange={(e) => setGalleryCaption(e.target.value)}
+                  className="w-full bg-dark-bg border border-dark-border rounded-xl px-4 py-2 text-sm text-white focus:outline-hidden focus:border-neon-purple focus:ring-1 focus:ring-neon-purple transition-all"
+                />
+              </div>
+
+              {/* Image Drag/Drop & File Pick */}
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-mono font-bold uppercase tracking-widest text-gray-400 block flex items-center justify-between">
+                  <span>Photo Asset</span>
+                  <span className="text-[9px] text-neon-cyan font-normal uppercase">Automatic Linker</span>
+                </label>
+                
+                <div
+                  onDragOver={handleGalleryDragOver}
+                  onDrop={handleGalleryDrop}
+                  className="border-2 border-dashed border-dark-border hover:border-neon-purple/40 rounded-xl p-4 text-center cursor-pointer bg-dark-bg/60 space-y-2 transition-all relative overflow-hidden group"
+                >
+                  <input
+                    type="file"
+                    ref={galleryFileInputRef}
+                    accept="image/*"
+                    onChange={handleGalleryFileChange}
+                    className="hidden"
+                  />
+                  <div className="flex flex-col items-center justify-center gap-1" onClick={() => galleryFileInputRef.current?.click()}>
+                    <Upload className="w-6 h-6 text-gray-500 group-hover:text-neon-purple-hover animate-pulse transition-colors" />
+                    <span className="text-xs text-gray-300 font-medium">Select Image file or Drop</span>
+                    <span className="text-[9px] text-gray-500 font-mono text-center">Max 5MB. Writes to sandbox developer disk.</span>
+                  </div>
+
+                  {galleryUploadLoading && (
+                    <div className="absolute inset-0 bg-black/90 flex flex-col items-center justify-center p-2 z-20">
+                      <div className="w-5 h-5 border-2 border-neon-purple border-t-transparent rounded-full animate-spin"></div>
+                      <span className="text-[11px] font-mono text-neon-purple mt-2 animate-pulse">{galleryUploadProgress}</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Direct Image URL fallback input */}
+                <div className="space-y-1 pt-1.5">
+                  <span className="text-[9px] font-mono text-gray-500">Or assign direct URL manually:</span>
+                  <input
+                    type="url"
+                    placeholder="https://images.unsplash.com/..."
+                    value={galleryImgUrl}
+                    onChange={(e) => setGalleryImgUrl(e.target.value)}
+                    className="w-full bg-dark-bg border border-dark-border rounded-xl px-3 py-1.5 text-xs text-white focus:outline-hidden"
+                  />
+                </div>
+
+                {/* Active Image Preview */}
+                {galleryImgUrl && (
+                  <div className="relative aspect-square rounded-xl overflow-hidden border border-dark-border mt-2 group bg-dark-bg">
+                    <img
+                      src={galleryImgUrl}
+                      alt="Gallery Preview"
+                      referrerPolicy="no-referrer"
+                      className="w-full h-full object-cover"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setGalleryImgUrl("")}
+                      className="absolute top-2 right-2 p-1 bg-black/70 rounded-full border border-white/10 text-neon-pink"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                    <div className="absolute bottom-2 left-2 px-2 py-0.5 bg-black/80 rounded-md border border-neon-cyan/20 text-[8px] font-mono text-neon-cyan animate-pulse">
+                      Preview Active
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Submitting button */}
+              <button
+                type="submit"
+                disabled={submitting || galleryUploadLoading}
+                className="w-full py-2.5 bg-neon-purple hover:bg-neon-purple-hover text-white rounded-xl text-xs font-mono font-bold uppercase tracking-wider shadow-md shadow-neon-purple/20 flex items-center justify-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                {submitting ? "Broadcasting..." : "Publish Image to Deck"}
+              </button>
+            </form>
+          </div>
+
+          {/* GALLERY INVENTORY GRID */}
+          <div className="lg:col-span-8 bg-dark-card border border-dark-border rounded-3xl p-6 space-y-6">
+            <h3 className="font-display font-extrabold text-lg text-white">
+              Secured Visual Frequencies ({gallery.length})
+            </h3>
+
+            {gallery.length === 0 ? (
+              <div className="py-12 text-center text-gray-500 font-mono text-xs">
+                Visual drive empty. Upload captured moments from our events.
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+                {gallery.map((img) => (
+                  <div
+                    key={img.id}
+                    className="group bg-dark-bg/60 border border-dark-border rounded-2xl overflow-hidden relative aspect-square transition-all duration-300 hover:border-dark-border"
+                  >
+                    <img
+                      src={img.url}
+                      alt={img.caption}
+                      referrerPolicy="no-referrer"
+                      className="w-full h-full object-cover"
+                    />
+                    <div className="absolute inset-0 bg-black/80 opacity-0 group-hover:opacity-100 transition-all flex flex-col justify-between p-3">
+                      <button
+                        onClick={async () => {
+                          if (confirm(`Confirm physical deletion of gallery image: "${img.caption || "Untitled"}"?`)) {
+                            await onDeleteGalleryImage(img.id);
+                          }
+                        }}
+                        className="self-end p-1.5 bg-neon-pink/15 hover:bg-neon-pink border border-neon-pink/30 hover:border-neon-pink text-neon-pink hover:text-white rounded-lg transition-all"
+                        title="Delete Capture"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                      <div>
+                        <p className="text-white text-xs font-bold font-display line-clamp-2 leading-tight">
+                          {img.caption || "Live Broadcast"}
+                        </p>
+                        <p className="text-[8px] font-mono text-neon-cyan mt-1">
+                          {new Date(img.created_at).toLocaleDateString()}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
 
         </div>
       )}

@@ -376,6 +376,71 @@ export default function App() {
     }
   };
 
+  // 8. Admin Database Operations: CREATE Gallery Image
+  const handleAddGalleryImage = async (url: string, caption: string): Promise<boolean> => {
+    try {
+      const payload = { 
+        url, 
+        caption: caption.trim() || "Independent Broadcast", 
+        created_at: new Date().toISOString() 
+      };
+      
+      if (isSupabaseConfigured && supabase) {
+        const { data, error } = await supabase
+          .from("gallery")
+          .insert([payload])
+          .select()
+          .single();
+        if (error) throw error;
+        setGallery((prev) => [data || payload, ...prev]);
+      } else {
+        const token = localStorage.getItem("stahiza_auth_token");
+        const res = await fetch("/api/gallery", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${token}`
+          },
+          body: JSON.stringify(payload)
+        });
+        if (!res.ok) throw new Error();
+        const newImg = await res.json();
+        setGallery((prev) => [newImg, ...prev]);
+      }
+      addToast("High-tech image broadcasted to gallery grid!", "success");
+      return true;
+    } catch (e) {
+      addToast("Failed to upload image. Check auth clearance.", "error");
+      return false;
+    }
+  };
+
+  // 9. Admin Database Operations: DELETE Gallery Image
+  const handleDeleteGalleryImage = async (id: string): Promise<boolean> => {
+    try {
+      if (isSupabaseConfigured && supabase) {
+        const { error } = await supabase
+          .from("gallery")
+          .delete()
+          .eq("id", id);
+        if (error) throw error;
+      } else {
+        const token = localStorage.getItem("stahiza_auth_token");
+        const res = await fetch(`/api/gallery/${id}`, {
+          method: "DELETE",
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+        if (!res.ok) throw new Error();
+      }
+      setGallery((prev) => prev.filter((img) => img.id !== id));
+      addToast("Gallery capture purged from main archives.", "success");
+      return true;
+    } catch (e) {
+      addToast("Failed to delete imagery. Auth credentials issue.", "error");
+      return false;
+    }
+  };
+
   return (
     <>
       <AnimatePresence mode="wait">
@@ -459,12 +524,15 @@ export default function App() {
                   <AdminDashboardView
                     events={events}
                     shoutouts={shoutouts}
+                    gallery={gallery}
                     adminUser={adminUser}
                     onLogout={handleLogout}
                     onCreateEvent={handleCreateEvent}
                     onEditEvent={handleEditEvent}
                     onDeleteEvent={handleDeleteEvent}
                     onDeleteShoutout={handleDeleteShoutout}
+                    onAddGalleryImage={handleAddGalleryImage}
+                    onDeleteGalleryImage={handleDeleteGalleryImage}
                   />
                 ) : (
                   /* Redirection node for unauthorized paths */
