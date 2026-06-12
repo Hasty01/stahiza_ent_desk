@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import { StahizaEvent, Shoutout } from "../types";
 import { supabase, isSupabaseConfigured } from "../lib/supabase";
+import ApprovalQueue from "./ApprovalQueue";
 
 interface AdminDashboardProps {
   events: StahizaEvent[];
@@ -39,19 +40,29 @@ export default function AdminDashboardView({
     setProfilesLoading(true);
     setProfilesError("");
     try {
-      const token = localStorage.getItem("stahiza_auth_token");
-      if (!token) throw new Error("No admin session token stored in active terminal.");
+      if (isSupabaseConfigured && supabase) {
+        const { data, error } = await supabase
+          .from("committee_profiles")
+          .select("*")
+          .order("full_name", { ascending: true });
 
-      const response = await fetch("/api/profiles", {
-        headers: {
-          "Authorization": `Bearer ${token}`
+        if (error) throw error;
+        setProfiles(data || []);
+      } else {
+        const token = localStorage.getItem("stahiza_auth_token");
+        if (!token) throw new Error("No admin session token stored in active terminal.");
+
+        const response = await fetch("/api/profiles", {
+          headers: {
+            "Authorization": `Bearer ${token}`
+          }
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error || "Registry terminal rejected transmission query.");
         }
-      });
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || "Registry terminal rejected transmission query.");
+        setProfiles(data);
       }
-      setProfiles(data);
     } catch (err: any) {
       setProfilesError(err.message || "Failed to inspect database profiles.");
     } finally {
@@ -69,22 +80,49 @@ export default function AdminDashboardView({
     setFormError("");
     setFormSuccess("");
     try {
-      const token = localStorage.getItem("stahiza_auth_token");
-      if (!token) throw new Error("No active operator session token found.");
+      if (isSupabaseConfigured && supabase) {
+        // Fetch current role first to clean "Pending Admin Approval" text if any
+        const { data: profileRecord, error: fetchErr } = await supabase
+          .from("committee_profiles")
+          .select("role")
+          .eq("id", id)
+          .single();
 
-      const response = await fetch(`/api/profiles/${id}/approve`, {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${token}`
+        let updatedRole = undefined;
+        if (!fetchErr && profileRecord?.role) {
+          updatedRole = profileRecord.role.replace(" (Pending Admin Approval)", "").trim();
         }
-      });
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || "Profile validation node rejected request.");
+
+        const { error } = await supabase
+          .from("committee_profiles")
+          .update({ 
+            approved: true,
+            ...(updatedRole ? { role: updatedRole } : {})
+          })
+          .eq("id", id);
+
+        if (error) throw error;
+        setFormSuccess(`Clearance level verified and approved for ${name}.`);
+        setTimeout(() => setFormSuccess(""), 4500);
+        fetchProfiles();
+      } else {
+        const token = localStorage.getItem("stahiza_auth_token");
+        if (!token) throw new Error("No active operator session token found.");
+
+        const response = await fetch(`/api/profiles/${id}/approve`, {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${token}`
+          }
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error || "Profile validation node rejected request.");
+        }
+        setFormSuccess(data.message || `Clearance level verified and approved for ${name}.`);
+        setTimeout(() => setFormSuccess(""), 4500);
+        fetchProfiles();
       }
-      setFormSuccess(data.message || `Clearance level verified and approved for ${name}.`);
-      setTimeout(() => setFormSuccess(""), 4500);
-      fetchProfiles();
     } catch (err: any) {
       setFormError(err.message || "Failed to verify profile registration.");
       setTimeout(() => setFormError(""), 5000);
@@ -95,22 +133,34 @@ export default function AdminDashboardView({
     setFormError("");
     setFormSuccess("");
     try {
-      const token = localStorage.getItem("stahiza_auth_token");
-      if (!token) throw new Error("No active operator session token found.");
+      if (isSupabaseConfigured && supabase) {
+        const { error } = await supabase
+          .from("committee_profiles")
+          .delete()
+          .eq("id", id);
 
-      const response = await fetch(`/api/profiles/${id}`, {
-        method: "DELETE",
-        headers: {
-          "Authorization": `Bearer ${token}`
+        if (error) throw error;
+        setFormSuccess(`Clearance request from ${name} successfully deleted.`);
+        setTimeout(() => setFormSuccess(""), 4500);
+        fetchProfiles();
+      } else {
+        const token = localStorage.getItem("stahiza_auth_token");
+        if (!token) throw new Error("No active operator session token found.");
+
+        const response = await fetch(`/api/profiles/${id}`, {
+          method: "DELETE",
+          headers: {
+            "Authorization": `Bearer ${token}`
+          }
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error || "Profile deletion node rejected request.");
         }
-      });
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || "Profile deletion node rejected request.");
+        setFormSuccess(data.message || `Clearance request from ${name} successfully deleted.`);
+        setTimeout(() => setFormSuccess(""), 4500);
+        fetchProfiles();
       }
-      setFormSuccess(data.message || `Clearance request from ${name} successfully deleted.`);
-      setTimeout(() => setFormSuccess(""), 4500);
-      fetchProfiles();
     } catch (err: any) {
       setFormError(err.message || "Failed to purge profile request.");
       setTimeout(() => setFormError(""), 5000);
@@ -698,187 +748,108 @@ export default function AdminDashboardView({
         </div>
       ) : (
         /* DESK APPROVALS MODULE */
-        <div id="desk-approvals-console" className="bg-dark-card border border-dark-border rounded-3xl p-6 space-y-8 bg-dot-matrix">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 relative z-10">
-            <div>
-              <h3 className="font-display font-extrabold text-lg text-white">
-                STAHIZA Committee & Approvals Desk
-              </h3>
-              <p className="text-xs text-gray-400 mt-1">
-                Oversee official committee accounts, establish clearance level, and approve pending applicant gateways.
-              </p>
-            </div>
-            <button
-              onClick={fetchProfiles}
-              disabled={profilesLoading}
-              className="px-3.5 py-1.5 bg-dark-bg border border-dark-border hover:border-neon-purple/50 text-gray-300 hover:text-white transition-all text-xs font-mono rounded-xl flex items-center gap-1.5 cursor-pointer"
-            >
-              <Terminal className={`w-3.5 h-3.5 ${profilesLoading ? "animate-spin text-neon-purple" : ""}`} />
-              Sync Base Registry
-            </button>
-          </div>
+        <div id="desk-approvals-console" className="space-y-8">
+          
+          {/* APPLICANT QUEUE COMPONENT */}
+          <ApprovalQueue 
+            onRefreshParent={fetchProfiles} 
+            adminUserId={adminUser.id} 
+          />
 
-          {profilesError && (
-            <div className="p-3 bg-neon-pink/10 border border-neon-pink/30 rounded-xl text-xs text-neon-pink font-medium flex items-center gap-2 relative z-10">
-              <ShieldAlert className="w-4 h-4 flex-shrink-0 animate-bounce" />
-              <span>{profilesError}</span>
+          {/* APPROVED CREW REGISTRY LIST MODULE */}
+          <div className="bg-dark-card border border-dark-border rounded-3xl p-6 space-y-6 bg-dot-matrix relative overflow-hidden">
+            <div className="absolute inset-0 bg-dot-matrix opacity-10 pointer-events-none" />
+            
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 relative z-10 border-b border-dark-border pb-4">
+              <div>
+                <h3 className="font-display font-extrabold text-lg text-white flex items-center gap-2">
+                  STAHIZA Active Operating Crew
+                  <span className="bg-neon-green/20 border border-neon-green/40 text-neon-green font-mono px-2 py-0.5 rounded-lg text-[10px] font-bold">
+                    {profiles.filter((p) => p.approved !== false).length} Verified
+                  </span>
+                </h3>
+                <p className="text-xs text-gray-400 mt-1">
+                  Active administrators, graphics coordinators, DJ leads, and operations handlers with verified clearance.
+                </p>
+              </div>
+              <button
+                onClick={fetchProfiles}
+                disabled={profilesLoading}
+                className="px-3 py-1.5 bg-dark-bg border border-dark-border hover:border-neon-purple/50 text-gray-300 hover:text-white transition-all text-xs font-mono rounded-xl flex items-center gap-1.5 cursor-pointer"
+              >
+                <Terminal className={`w-3.5 h-3.5 ${profilesLoading ? "animate-spin text-neon-purple" : ""}`} />
+                Sync Crew Registry
+              </button>
             </div>
-          )}
 
-          {/* Toast/Status errors & successes (locally rendered if any) */}
-          {formError && (
-            <div className="p-3 bg-neon-pink/10 border border-neon-pink/30 rounded-xl text-xs text-neon-pink font-medium flex items-center gap-2 relative z-10">
-              <ShieldAlert className="w-4 h-4 flex-shrink-0" />
-              <span>{formError}</span>
-            </div>
-          )}
-          {formSuccess && (
-            <div className="p-3 bg-neon-green/10 border border-neon-green/30 rounded-xl text-xs text-neon-green font-medium flex items-center gap-2 relative z-10">
-              <Check className="w-4 h-4 flex-shrink-0" />
-              <span>{formSuccess}</span>
-            </div>
-          )}
-
-          {profilesLoading ? (
-            <div className="py-16 flex flex-col items-center justify-center space-y-2 relative z-10">
-              <div className="w-8 h-8 border-2 border-neon-purple border-t-transparent rounded-full animate-spin"></div>
-              <span className="text-xs font-mono text-gray-500">Retrieving security parameters...</span>
-            </div>
-          ) : (
-            <div className="space-y-8 relative z-10">
-              
-              {/* SECTION: PENDING CLEARANCE GATES */}
-              <div className="space-y-3">
-                <div className="flex items-center gap-2 pb-1 border-b border-dark-border">
-                  <Terminal className="w-4 h-4 text-neon-purple" />
-                  <h4 className="font-mono text-xs font-bold uppercase tracking-widest text-gray-300">
-                    Pending Clearance Gates ({profiles.filter((p) => p.approved === false).length})
-                  </h4>
-                </div>
-
-                {profiles.filter((p) => p.approved === false).length === 0 ? (
-                  <div className="py-8 text-center text-gray-500 font-mono text-xs border border-dashed border-dark-border/40 rounded-2xl bg-dark-bg/20">
-                    No pending profile clearance requests in memory buffers.
+            {profilesLoading ? (
+              <div className="py-12 flex flex-col items-center justify-center space-y-2 relative z-10">
+                <div className="w-8 h-8 border-2 border-neon-purple border-t-transparent rounded-full animate-spin"></div>
+                <span className="text-xs font-mono text-gray-500">Refreshing crew parameters...</span>
+              </div>
+            ) : (
+              <div className="space-y-4 relative z-10">
+                {profiles.filter((p) => p.approved !== false).length === 0 ? (
+                  <div className="py-8 text-center text-gray-500 font-mono text-xs">
+                    No verified operators found in memory buffers.
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 gap-3">
                     {profiles
-                      .filter((p) => p.approved === false)
+                      .filter((p) => p.approved !== false)
                       .map((profile) => (
                         <div
                           key={profile.id}
-                          className="bg-dark-bg/40 border border-neon-purple/20 hover:border-neon-purple/40 rounded-2xl p-5 flex flex-col justify-between space-y-4 transition-all"
+                          className="bg-dark-bg/40 border border-dark-border/60 hover:border-dark-border rounded-2xl p-4 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 transition-all duration-300"
                         >
-                          <div className="space-y-2">
-                            <div className="flex items-start justify-between">
-                              <div>
-                                <h5 className="font-display font-extrabold text-white text-base">
+                          <div className="flex items-center gap-4 flex-1 min-w-0">
+                            <div className="w-10 h-10 rounded-xl bg-neon-purple/10 border border-neon-purple/20 flex items-center justify-center text-neon-purple font-display font-black text-lg">
+                              {profile.full_name?.charAt(0) || "U"}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <h5 className="font-display font-bold text-sm text-white truncate">
                                   {profile.full_name}
                                 </h5>
-                                <span className="text-xs font-mono text-neon-purple font-semibold">
-                                  @{profile.username}
+                                <span className="text-[10px] font-mono text-neon-cyan font-bold bg-neon-cyan/5 px-1.5 py-0.5 border border-neon-cyan/15 rounded-md">
+                                  @{profile.username || "operator"}
                                 </span>
+                                {adminUser.id === profile.id && (
+                                  <span className="text-[9px] font-mono text-neon-pink border border-neon-pink/20 bg-neon-pink/5 px-1 rounded animate-pulse">
+                                    Active Operator
+                                  </span>
+                                )}
                               </div>
-                              <span className="px-2 py-0.5 bg-neon-purple/10 border border-neon-purple/30 text-[9px] font-mono text-neon-purple-hover uppercase rounded-md animate-pulse">
-                                Pending Approval
-                              </span>
-                            </div>
-
-                            <div className="space-y-1 font-mono text-[11px] text-gray-400 bg-black/30 p-3 rounded-xl border border-dark-border/45">
-                              <div><span className="text-gray-500 text-[10px]">EMAIL:</span> {profile.email}</div>
-                              <div><span className="text-gray-500 text-[10px]">PROPOSED ROLE:</span> {profile.role}</div>
-                              <div><span className="text-gray-500 text-[10px]">PROFILE ID:</span> {profile.id}</div>
+                              <div className="flex flex-wrap items-center gap-x-2 text-[10px] font-mono text-gray-500 mt-0.5">
+                                <span>Role: <strong className="text-gray-300">{profile.role}</strong></span>
+                                <span>&bull;</span>
+                                <span>{profile.email}</span>
+                              </div>
                             </div>
                           </div>
 
-                          <div className="flex items-center gap-2 pt-1">
-                            <button
-                              onClick={() => handleApproveProfile(profile.id, profile.full_name)}
-                              className="flex-1 py-2 bg-neon-green/10 hover:bg-neon-green text-neon-green border border-neon-green/20 rounded-xl text-xs font-mono font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all cursor-pointer"
-                            >
-                              <UserCheck className="w-3.5 h-3.5" />
-                              Grant Clearance
-                            </button>
+                          {adminUser.id !== profile.id && (
                             <button
                               onClick={() => {
-                                if (confirm(`Erase signup request from ${profile.full_name}?`)) {
+                                if (confirm(`Security Protocol Priority Warning: Revoke clearance and erase ${profile.full_name} from active operating logs?`)) {
                                   handleRejectProfile(profile.id, profile.full_name);
                                 }
                               }}
-                              className="py-2 px-4 bg-neon-pink/10 hover:bg-neon-pink text-neon-pink border border-neon-pink/20 rounded-xl text-xs font-mono font-bold uppercase transition-all cursor-pointer"
+                              className="px-3.5 py-2 border border-dark-border text-gray-500 hover:text-neon-pink hover:border-neon-pink/30 rounded-xl bg-dark-bg/20 transition-all cursor-pointer flex items-center justify-center gap-1 text-[11px] font-mono"
+                              title="Revoke / Suspend Account Access"
                             >
-                              Reject
+                              <Trash2 className="w-3.5 h-3.5" />
+                              Revoke Crew
                             </button>
-                          </div>
+                          )}
                         </div>
                       ))}
                   </div>
                 )}
               </div>
+            )}
+          </div>
 
-              {/* SECTION: STAHIZA ACTIVE OPERATORS */}
-              <div className="space-y-3">
-                <div className="flex items-center gap-2 pb-1 border-b border-dark-border">
-                  <Check className="w-4 h-4 text-neon-green" />
-                  <h4 className="font-mono text-xs font-bold uppercase tracking-widest text-gray-300">
-                    Approved Crew Registry ({profiles.filter((p) => p.approved !== false).length})
-                  </h4>
-                </div>
-
-                <div className="space-y-3">
-                  {profiles
-                    .filter((p) => p.approved !== false)
-                    .map((profile) => (
-                      <div
-                        key={profile.id}
-                        className="bg-dark-bg/60 border border-dark-border hover:border-dark-border/80 rounded-2xl p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 transition-all"
-                      >
-                        <div className="flex items-center gap-4 flex-1 min-w-0">
-                          <div className="w-10 h-10 rounded-xl bg-neon-purple/10 border border-neon-purple/20 flex items-center justify-center text-neon-purple font-display font-black text-lg">
-                            {profile.full_name.charAt(0)}
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-2">
-                              <h5 className="font-display font-bold text-sm text-white truncate">
-                                {profile.full_name}
-                              </h5>
-                              <span className="text-[10px] font-mono text-neon-cyan font-bold bg-neon-cyan/5 px-1.5 py-0.5 border border-neon-cyan/15 rounded-md">
-                                @{profile.username || "operator"}
-                              </span>
-                              {adminUser.id === profile.id && (
-                                <span className="text-[9px] font-mono text-neon-pink border border-neon-pink/20 bg-neon-pink/5 px-1 rounded">
-                                  You
-                                </span>
-                              )}
-                            </div>
-                            <div className="flex flex-wrap items-center gap-x-2 text-[10px] font-mono text-gray-500 mt-0.5">
-                              <span>Role: <strong className="text-gray-300">{profile.role}</strong></span>
-                              <span>&bull;</span>
-                              <span>{profile.email}</span>
-                            </div>
-                          </div>
-                        </div>
-
-                        {adminUser.id !== profile.id && (
-                          <button
-                            onClick={() => {
-                              if (confirm(`Operators warning: Erase ${profile.full_name} from committee profiles?`)) {
-                                handleRejectProfile(profile.id, profile.full_name);
-                              }
-                            }}
-                            className="p-2 border border-dark-border text-gray-500 hover:text-neon-pink hover:border-neon-pink/30 rounded-xl bg-dark-bg/40 transition-all cursor-pointer"
-                            title="Suspend Clearance / Strike Registration"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        )}
-                      </div>
-                    ))}
-                </div>
-              </div>
-
-            </div>
-          )}
         </div>
       )}
     </div>

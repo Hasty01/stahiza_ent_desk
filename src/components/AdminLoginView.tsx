@@ -60,7 +60,8 @@ export default function AdminLoginView({ onLoginSuccess }: AdminLoginViewProps) 
                   full_name: fullName.trim(),
                   username: username.trim().toLowerCase(),
                   role: `${role.trim()} (Pending Admin Approval)`,
-                  email: email.trim()
+                  email: email.trim(),
+                  approved: false
                 }
               ]);
             
@@ -168,6 +169,12 @@ export default function AdminLoginView({ onLoginSuccess }: AdminLoginViewProps) 
             // Sign out immediately to clear unprivileged sessions
             await supabase.auth.signOut();
             throw new Error("Clearance rejected: ID not listed or pending approval in Committee Profiles database.");
+          }
+
+          // Strict Administrator Approval Check
+          if (profile.approved === false || String(profile.approved) === "false" || !profile.approved) {
+            await supabase.auth.signOut();
+            throw new Error("Clearance rejected: Your profile registration is pending Administrator approval.");
           }
 
           onLoginSuccess(authData.session?.access_token || "supabase_session", {
