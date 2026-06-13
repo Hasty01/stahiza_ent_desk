@@ -1,4 +1,4 @@
-import { PartyPopper, Calendar, Image as ImageIcon, Megaphone, ShieldCheck, Sparkles, LogOut, Menu, X } from "lucide-react";
+import { PartyPopper, Calendar, Image as ImageIcon, Megaphone, ShieldCheck, Sparkles, LogOut, Menu, X, TrendingUp } from "lucide-react";
 import { useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -17,6 +17,7 @@ export default function Header({ currentView, onNavigate, adminUser, onLogout }:
     { id: "events", label: "Events", icon: Calendar },
     { id: "gallery", label: "Gallery", icon: ImageIcon },
     { id: "shoutouts", label: "Shoutouts", icon: Megaphone },
+    { id: "trends", label: "Trends", icon: TrendingUp },
   ];
 
   return (

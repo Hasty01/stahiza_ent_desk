@@ -5,6 +5,7 @@ import HomeView from "./components/HomeView";
 import EventsView from "./components/EventsView";
 import GalleryView from "./components/GalleryView";
 import ShoutoutsView from "./components/ShoutoutsView";
+import Trends from "./components/Trends";
 import AdminLoginView from "./components/AdminLoginView";
 import AdminDashboardView from "./components/AdminDashboardView";
 import Toast, { ToastMessage } from "./components/Toast";
@@ -699,6 +700,10 @@ export default function App() {
                   shoutouts={shoutouts} 
                   onAddShoutout={handleAddShoutout} 
                 />
+              )}
+
+              {currentView === "trends" && (
+                <Trends />
               )}
 
               {currentView === "admin-login" && (
