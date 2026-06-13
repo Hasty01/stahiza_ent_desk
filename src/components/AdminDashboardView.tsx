@@ -1,4 +1,5 @@
 import { useState, useRef, ChangeEvent, DragEvent, FormEvent, useEffect } from "react";
+import { motion, AnimatePresence } from "motion/react";
 import { 
   ShieldAlert, Calendar, Plus, Edit3, Trash2, LogOut, 
   Upload, Sparkles, Terminal, FileImage, ClipboardList, 
@@ -722,56 +723,205 @@ export default function AdminDashboardView({
       </section>
 
       {/* DASH NAVIGATION TABS */}
-      <div className="flex flex-wrap bg-dark-card p-1.5 rounded-2xl border border-dark-border self-start gap-1 sm:gap-0 max-w-3xl">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 w-full">
+        {/* Events Manager Tab */}
         <button
           onClick={() => setActiveTab("events")}
-          className={`flex-1 py-2.5 px-5 rounded-xl font-mono text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all min-w-[140px] ${
+          className={`relative group p-4 bg-dark-card border rounded-2xl transition-all duration-300 text-left overflow-hidden cursor-pointer ${
             activeTab === "events"
-              ? "bg-neon-purple text-white shadow-md shadow-neon-purple/30"
-              : "text-gray-400 hover:text-white"
+              ? "border-neon-purple border-glow-purple bg-neon-purple/5"
+              : "border-dark-border hover:border-neon-purple/30 hover:bg-white/[0.01]"
           }`}
         >
-          <Calendar className="w-4 h-4" />
-          Events Manager ({events.length})
+          {activeTab === "events" && (
+            <motion.div
+              layoutId="adminActiveTabIndicator"
+              className="absolute inset-0 bg-gradient-to-r from-neon-purple/10 to-transparent pointer-events-none z-0"
+              transition={{ type: "spring", stiffness: 380, damping: 30 }}
+            />
+          )}
+          <div className="flex items-center justify-between relative z-10">
+            <div className={`p-2 rounded-xl transition-all ${
+              activeTab === "events" ? "bg-neon-purple/10 text-neon-purple" : "bg-white/5 text-gray-400 group-hover:text-neon-purple"
+            }`}>
+              <Calendar className="w-5 h-5" />
+            </div>
+            <span className={`text-[10px] font-mono px-2 py-0.5 rounded-md border ${
+              activeTab === "events" 
+                ? "bg-neon-purple/10 border-neon-purple/30 text-neon-purple" 
+                : "bg-white/5 border-white/5 text-gray-500"
+            }`}>
+              {events.length}
+            </span>
+          </div>
+          <div className="mt-4 relative z-10">
+            <h4 className={`text-xs font-mono font-bold uppercase tracking-wider ${
+              activeTab === "events" ? "text-white" : "text-gray-400 group-hover:text-white"
+            }`}>
+              Events Manager
+            </h4>
+            <p className="text-[10px] text-gray-500 mt-1 truncate font-mono">
+              Scheduler & Broadcasts
+            </p>
+          </div>
+          <div className={`absolute bottom-0 left-0 right-0 h-1 transition-all ${
+            activeTab === "events" ? "bg-neon-purple shadow-[0_0_10px_#9d4edd]" : "bg-transparent"
+          }`} />
         </button>
+
+        {/* Shoutouts Tab */}
         <button
           onClick={() => setActiveTab("shoutouts")}
-          className={`flex-1 py-2.5 px-5 rounded-xl font-mono text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all min-w-[140px] ${
+          className={`relative group p-4 bg-dark-card border rounded-2xl transition-all duration-300 text-left overflow-hidden cursor-pointer ${
             activeTab === "shoutouts"
-              ? "bg-neon-purple text-white shadow-md shadow-neon-purple/30"
-              : "text-gray-400 hover:text-white"
+              ? "border-neon-cyan border-glow-cyan bg-neon-cyan/5"
+              : "border-dark-border hover:border-neon-cyan/30 hover:bg-white/[0.01]"
           }`}
         >
-          <Megaphone className="w-4 h-4" />
-          Shoutout Stream ({shoutouts.length})
+          {activeTab === "shoutouts" && (
+            <motion.div
+              layoutId="adminActiveTabIndicator"
+              className="absolute inset-0 bg-gradient-to-r from-neon-cyan/10 to-transparent pointer-events-none z-0"
+              transition={{ type: "spring", stiffness: 380, damping: 30 }}
+            />
+          )}
+          <div className="flex items-center justify-between relative z-10">
+            <div className={`p-2 rounded-xl transition-all ${
+              activeTab === "shoutouts" ? "bg-neon-cyan/10 text-neon-cyan" : "bg-white/5 text-gray-400 group-hover:text-neon-cyan"
+            }`}>
+              <Megaphone className="w-5 h-5" />
+            </div>
+            <span className={`text-[10px] font-mono px-2 py-0.5 rounded-md border ${
+              activeTab === "shoutouts" 
+                ? "bg-neon-cyan/10 border-neon-cyan/30 text-neon-cyan" 
+                : "bg-white/5 border-white/5 text-gray-500"
+            }`}>
+              {shoutouts.length}
+            </span>
+          </div>
+          <div className="mt-4 relative z-10">
+            <h4 className={`text-xs font-mono font-bold uppercase tracking-wider ${
+              activeTab === "shoutouts" ? "text-white" : "text-gray-400 group-hover:text-white"
+            }`}>
+              Shoutout Stream
+            </h4>
+            <p className="text-[10px] text-gray-500 mt-1 truncate font-mono">
+              Student Logs & Audio Feed
+            </p>
+          </div>
+          <div className={`absolute bottom-0 left-0 right-0 h-1 transition-all ${
+            activeTab === "shoutouts" ? "bg-neon-cyan shadow-[0_0_10px_#00f0ff]" : "bg-transparent"
+          }`} />
         </button>
+
+        {/* Desk Approvals Tab */}
         <button
           id="approvals-tab-btn"
           onClick={() => setActiveTab("approvals")}
-          className={`flex-1 py-2.5 px-5 rounded-xl font-mono text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all min-w-[140px] ${
+          className={`relative group p-4 bg-dark-card border rounded-2xl transition-all duration-300 text-left overflow-hidden cursor-pointer ${
             activeTab === "approvals"
-              ? "bg-neon-purple text-white shadow-md shadow-neon-purple/30"
-              : "text-gray-400 hover:text-white"
+              ? "border-neon-pink shadow-[0_0_12px_rgba(255,0,127,0.15)] bg-neon-pink/5"
+              : "border-dark-border hover:border-neon-pink/30 hover:bg-white/[0.01]"
           }`}
         >
-          <Users className="w-4 h-4" />
-          Desk Approvals ({profiles.filter((p) => p.approved === false).length})
+          {activeTab === "approvals" && (
+            <motion.div
+              layoutId="adminActiveTabIndicator"
+              className="absolute inset-0 bg-gradient-to-r from-neon-pink/10 to-transparent pointer-events-none z-0"
+              transition={{ type: "spring", stiffness: 380, damping: 30 }}
+            />
+          )}
+          <div className="flex items-center justify-between relative z-10">
+            <div className={`p-2 rounded-xl transition-all ${
+              activeTab === "approvals" ? "bg-neon-pink/10 text-neon-pink" : "bg-white/5 text-gray-400 group-hover:text-neon-pink"
+            }`}>
+              <Users className="w-5 h-5" />
+            </div>
+            <div className="flex items-center gap-1.5">
+              {profiles.filter((p) => p.approved === false).length > 0 && (
+                <span className="w-1.5 h-1.5 bg-neon-pink rounded-full animate-pulse" />
+              )}
+              <span className={`text-[10px] font-mono px-2 py-0.5 rounded-md border ${
+                activeTab === "approvals" 
+                  ? "bg-neon-pink/10 border-neon-pink/30 text-neon-pink" 
+                  : "bg-white/5 border-white/5 text-gray-500"
+              }`}>
+                {profiles.filter((p) => p.approved === false).length}
+              </span>
+            </div>
+          </div>
+          <div className="mt-4 relative z-10">
+            <h4 className={`text-xs font-mono font-bold uppercase tracking-wider ${
+              activeTab === "approvals" ? "text-white" : "text-gray-400 group-hover:text-white"
+            }`}>
+              Desk Approvals
+            </h4>
+            <p className="text-[10px] text-gray-500 mt-1 truncate font-mono">
+              Crew Registry Control
+            </p>
+          </div>
+          <div className={`absolute bottom-0 left-0 right-0 h-1 transition-all ${
+            activeTab === "approvals" ? "bg-neon-pink shadow-[0_0_10px_#ff007f]" : "bg-transparent"
+          }`} />
         </button>
+
+        {/* Gallery Tab */}
         <button
           onClick={() => setActiveTab("gallery")}
-          className={`flex-1 py-2.5 px-5 rounded-xl font-mono text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all min-w-[140px] ${
+          className={`relative group p-4 bg-dark-card border rounded-2xl transition-all duration-300 text-left overflow-hidden cursor-pointer ${
             activeTab === "gallery"
-              ? "bg-neon-purple text-white shadow-md shadow-neon-purple/30"
-              : "text-gray-400 hover:text-white"
+              ? "border-neon-green border-glow-green bg-neon-green/5"
+              : "border-dark-border hover:border-neon-green/30 hover:bg-white/[0.01]"
           }`}
         >
-          <FileImage className="w-4 h-4" />
-          Gallery Grid ({gallery.length})
+          {activeTab === "gallery" && (
+            <motion.div
+              layoutId="adminActiveTabIndicator"
+              className="absolute inset-0 bg-gradient-to-r from-neon-green/10 to-transparent pointer-events-none z-0"
+              transition={{ type: "spring", stiffness: 380, damping: 30 }}
+            />
+          )}
+          <div className="flex items-center justify-between relative z-10">
+            <div className={`p-2 rounded-xl transition-all ${
+              activeTab === "gallery" ? "bg-neon-green/10 text-neon-green" : "bg-white/5 text-gray-400 group-hover:text-neon-green"
+            }`}>
+              <FileImage className="w-5 h-5" />
+            </div>
+            <span className={`text-[10px] font-mono px-2 py-0.5 rounded-md border ${
+              activeTab === "gallery" 
+                ? "bg-neon-green/10 border-neon-green/30 text-neon-green" 
+                : "bg-white/5 border-white/5 text-gray-500"
+            }`}>
+              {gallery.length}
+            </span>
+          </div>
+          <div className="mt-4 relative z-10">
+            <h4 className={`text-xs font-mono font-bold uppercase tracking-wider ${
+              activeTab === "gallery" ? "text-white" : "text-gray-400 group-hover:text-white"
+            }`}>
+              Gallery Grid
+            </h4>
+            <p className="text-[10px] text-gray-500 mt-1 truncate font-mono">
+              Visual Scene Deck
+            </p>
+          </div>
+          <div className={`absolute bottom-0 left-0 right-0 h-1 transition-all ${
+            activeTab === "gallery" ? "bg-neon-green shadow-[0_0_10px_#39ff14]" : "bg-transparent"
+          }`} />
         </button>
       </div>
 
-      {/* RENDER ACTIVE TAP MODULES */}
-      {activeTab === "events" ? (
+      {/* RENDER ACTIVE TAB MODULES */}
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={activeTab}
+          initial={{ opacity: 0, y: 15 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -15 }}
+          transition={{ duration: 0.2, ease: "easeInOut" }}
+          className="focus:outline-hidden"
+        >
+          {activeTab === "events" ? (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
           
           {/* CREATE/EDIT FORM STAGE (Left-Large) */}
@@ -1287,6 +1437,8 @@ export default function AdminDashboardView({
 
         </div>
       )}
+        </motion.div>
+      </AnimatePresence>
     </div>
   );
 }
