@@ -606,6 +606,10 @@ app.post("/api/upload", authMiddleware, (req, res) => {
 });
 
 
+// Quota handling and rate limiting tracking (Circuit Breaker pattern to prevent timeout hangs on 429 quota exhausted errors)
+let lastQuotaExceededTime = 0;
+const QUOTA_COOLDOWN_MS = 10 * 60 * 1000; // 10 minutes cooldown before we attempt any Gemini calls again
+
 // 6. Real-time Trends API utilizing Gemini 3.5 with Search Grounding
 app.get("/api/trends", async (req, res) => {
   const forceRefresh = req.query.refresh === "true";
@@ -668,10 +672,19 @@ app.get("/api/trends", async (req, res) => {
 
   try {
     const cachedData = readData<any | null>(CACHE_FILE, null);
+    const now = Date.now();
+    const insideCooldown = (now - lastQuotaExceededTime) < QUOTA_COOLDOWN_MS;
+
+    if (insideCooldown) {
+      console.warn(`Gemini API is in active quota cooldown (${Math.round((QUOTA_COOLDOWN_MS - (now - lastQuotaExceededTime)) / 1000)}s remaining due to previous 429). Returning cached/fallback trends immediately.`);
+      if (cachedData) {
+        return res.json(cachedData);
+      }
+      return res.json(fallbackTrends);
+    }
     
     if (cachedData && !forceRefresh) {
       const cacheTime = new Date(cachedData.last_updated).getTime();
-      const now = Date.now();
       const ageHours = (now - cacheTime) / (1000 * 60 * 60);
       
       if (ageHours < 4) { // Cache valid for 4 hours
@@ -786,6 +799,25 @@ Ensure every single name, song, news title, and movie is authentic, real, and cu
     }
   } catch (err: any) {
     console.warn("Exception during live Gemini trends fetching, falling back to static resources: ", err);
+    
+    // Check if the failure is code 429, RESOURCE_EXHAUSTED or quota error
+    const isQuotaError = err?.status === "RESOURCE_EXHAUSTED" || 
+                         err?.message?.includes("quota") || 
+                         err?.statusCode === 429 || 
+                         err?.message?.includes("429") ||
+                         err?.toString().includes("429") ||
+                         err?.toString().includes("RESOURCE_EXHAUSTED") ||
+                         (err?.status && String(err.status) === "429");
+
+    if (isQuotaError) {
+      lastQuotaExceededTime = Date.now();
+      console.warn("Quota exceeded / Rate-limit detected! Activated 10-minute cooldown for Gemini Trends synchronization.");
+    }
+
+    // Write fallback structure to disk cache so we don't repeat-hammer rate limits immediately
+    try {
+      writeData(CACHE_FILE, fallbackTrends);
+    } catch (ignore) {}
     return res.json(fallbackTrends);
   }
 });

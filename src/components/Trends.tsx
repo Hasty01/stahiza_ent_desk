@@ -106,6 +106,12 @@ export default function Trends() {
       })
     : "Static fallback cache";
 
+  const billboardSongs = trends?.billboard_songs || [];
+  const ugandaSongs = trends?.uganda_songs || [];
+  const trendingMovies = trends?.trending_movies || [];
+  const ugandaNews = trends?.uganda_news || [];
+  const worldNews = trends?.world_news || [];
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
       {/* HEADER NODES */}
@@ -219,7 +225,7 @@ export default function Trends() {
                 </button>
               </div>
               <div className="divide-y divide-white/5">
-                {trends?.billboard_songs.slice(0, 5).map((song) => (
+                {billboardSongs.slice(0, 5).map((song) => (
                   <div key={`mini-billboard-${song.rank}`} className="flex items-center justify-between py-2.5 first:pt-0 last:pb-0">
                     <div className="flex items-center gap-3 truncate">
                       <span className={`w-6 h-6 rounded-md border text-[10px] font-mono font-bold flex items-center justify-center shrink-0 ${getRankBadgeColor(song.rank)}`}>
@@ -250,7 +256,7 @@ export default function Trends() {
                 </button>
               </div>
               <div className="divide-y divide-white/5">
-                {trends?.uganda_songs.slice(0, 5).map((song) => (
+                {ugandaSongs.slice(0, 5).map((song) => (
                   <div key={`mini-uganda-${song.rank}`} className="flex items-center justify-between py-2.5 first:pt-0 last:pb-0">
                     <div className="flex items-center gap-3 truncate">
                       <span className={`w-6 h-6 rounded-md border text-[10px] font-mono font-bold flex items-center justify-center shrink-0 ${getRankBadgeColor(song.rank)}`}>
@@ -286,7 +292,7 @@ export default function Trends() {
                 </button>
               </div>
               <div className="divide-y divide-white/5">
-                {trends?.trending_movies.slice(0, 5).map((movie) => (
+                {trendingMovies.slice(0, 5).map((movie) => (
                   <div key={`mini-movie-${movie.rank}`} className="flex items-center gap-3 py-2.5 first:pt-0 last:pb-0 truncate">
                     <span className={`w-6 h-6 rounded-md border text-[10px] font-mono font-bold flex items-center justify-center shrink-0 ${getRankBadgeColor(movie.rank)}`}>
                       {movie.rank}
@@ -311,7 +317,7 @@ export default function Trends() {
                   </div>
                 </div>
                 <div className="space-y-4">
-                  {trends?.uganda_news.slice(0, 2).map((news, idx) => (
+                  {ugandaNews.slice(0, 2).map((news, idx) => (
                     <div key={`mini-ug-news-${idx}`} className="space-y-1">
                       <p className="text-xs font-bold text-white leading-snug hover:text-cyan-400 transition-colors">{news.title}</p>
                       <p className="text-[11px] text-gray-400 line-clamp-2">{news.summary}</p>
@@ -334,7 +340,7 @@ export default function Trends() {
                   </div>
                 </div>
                 <div className="space-y-4">
-                  {trends?.world_news.slice(0, 2).map((news, idx) => (
+                  {worldNews.slice(0, 2).map((news, idx) => (
                     <div key={`mini-wd-news-${idx}`} className="space-y-1">
                       <p className="text-xs font-bold text-white leading-snug hover:text-purple-400 transition-colors">{news.title}</p>
                       <p className="text-[11px] text-gray-400 line-clamp-2">{news.summary}</p>
@@ -367,7 +373,7 @@ export default function Trends() {
               <p className="text-xs text-gray-400 pb-2">The premier benchmark of music recordings globally. Displaying current Top 10.</p>
               
               <div className="space-y-2">
-                {trends?.billboard_songs.map((song) => (
+                {billboardSongs.map((song) => (
                   <div
                     key={`b-full-${song.rank}`}
                     className="flex items-center justify-between p-4 bg-dark-card/30 border border-white/5 rounded-2xl group hover:border-cyan-400/20 transition-all duration-300"
@@ -425,7 +431,7 @@ export default function Trends() {
               <p className="text-xs text-gray-400 pb-2">Tracking local hits, Afrobeat anthems, Kidandali vibes, and TikTok viral tracks across Uganda.</p>
 
               <div className="space-y-2">
-                {trends?.uganda_songs.map((song) => (
+                {ugandaSongs.map((song) => (
                   <div
                     key={`u-full-${song.rank}`}
                     className="flex items-center justify-between p-4 bg-dark-card/30 border border-white/5 rounded-2xl group hover:border-purple-400/20 transition-all duration-300"
@@ -490,7 +496,7 @@ export default function Trends() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {trends?.trending_movies.map((movie) => (
+              {trendingMovies.map((movie) => (
                 <div
                   key={`m-full-${movie.rank}`}
                   className="p-5 bg-dark-card/30 border border-white/5 rounded-2xl relative overflow-hidden group hover:border-pink-500/25 transition-all duration-300 flex flex-col justify-between"
@@ -539,7 +545,7 @@ export default function Trends() {
                   UGANDA INTEL FEED
                 </h4>
                 <div className="space-y-4">
-                  {trends?.uganda_news.map((news, idx) => (
+                  {ugandaNews.map((news, idx) => (
                     <div
                       key={`news-ug-${idx}`}
                       className="p-5 bg-dark-card/25 border border-white/5 rounded-2xl space-y-2.5 hover:border-cyan-400/20 transition-all duration-300"
@@ -568,7 +574,7 @@ export default function Trends() {
                   GLOBAL INTEL FEED
                 </h4>
                 <div className="space-y-4">
-                  {trends?.world_news.map((news, idx) => (
+                  {worldNews.map((news, idx) => (
                     <div
                       key={`news-wd-${idx}`}
                       className="p-5 bg-dark-card/25 border border-white/5 rounded-2xl space-y-2.5 hover:border-purple-400/20 transition-all duration-300"
