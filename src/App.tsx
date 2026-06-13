@@ -51,30 +51,46 @@ export default function App() {
         let shoutsRes: Shoutout[] = [];
         let galRes: GalleryImage[] = [];
 
-        if (isSupabaseConfigured && supabase) {
-          const [evResp, shResp, gaResp] = await Promise.all([
-            supabase.from("events").select("*").order("date", { ascending: true }),
-            supabase.from("shoutouts").select("*").order("created_at", { ascending: false }),
-            supabase.from("gallery").select("*").order("created_at", { ascending: false })
-          ]);
+        // Fetch Events safely
+        try {
+          if (isSupabaseConfigured && supabase) {
+            const { data, error } = await supabase.from("events").select("*").order("date", { ascending: true });
+            if (error) throw error;
+            eventsRes = data || [];
+          } else {
+            throw new Error("Supabase is not configured yet");
+          }
+        } catch (err) {
+          console.warn("Using local events sandbox database fallback:", err);
+          eventsRes = await fetch("/api/events").then(r => r.json()).catch(() => []);
+        }
 
-          if (evResp.error) throw evResp.error;
-          if (shResp.error) throw shResp.error;
-          if (gaResp.error) throw gaResp.error;
+        // Fetch Shoutouts safely
+        try {
+          if (isSupabaseConfigured && supabase) {
+            const { data, error } = await supabase.from("shoutouts").select("*").order("created_at", { ascending: false });
+            if (error) throw error;
+            shoutsRes = data || [];
+          } else {
+            throw new Error("Supabase is not configured yet");
+          }
+        } catch (err) {
+          console.warn("Using local shoutouts sandbox database fallback:", err);
+          shoutsRes = await fetch("/api/shoutouts").then(r => r.json()).catch(() => []);
+        }
 
-          eventsRes = evResp.data || [];
-          shoutsRes = shResp.data || [];
-          galRes = gaResp.data || [];
-        } else {
-          // Fetch from standard fallback Express backend
-          const [evData, shData, galData] = await Promise.all([
-            fetch("/api/events").then(r => r.json()),
-            fetch("/api/shoutouts").then(r => r.json()),
-            fetch("/api/gallery").then(r => r.json())
-          ]);
-          eventsRes = evData;
-          shoutsRes = shData;
-          galRes = galData;
+        // Fetch Gallery safely
+        try {
+          if (isSupabaseConfigured && supabase) {
+            const { data, error } = await supabase.from("gallery").select("*").order("created_at", { ascending: false });
+            if (error) throw error;
+            galRes = data || [];
+          } else {
+            throw new Error("Supabase is not configured yet");
+          }
+        } catch (err) {
+          console.warn("Using local gallery sandbox database fallback:", err);
+          galRes = await fetch("/api/gallery").then(r => r.json()).catch(() => []);
         }
 
         setEvents(eventsRes);
@@ -147,37 +163,46 @@ export default function App() {
 
   // 3. Public Submit Shoutout function
   const handleAddShoutout = async (studentName: string, message: string, songRequest?: string): Promise<boolean> => {
+    const payload = {
+      student_name: studentName,
+      message,
+      song_request: songRequest || "",
+      created_at: new Date().toISOString()
+    };
+
+    const saveShoutoutLocally = async () => {
+      const res = await fetch("/api/shoutouts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ student_name: studentName, message, song_request: songRequest }),
+      });
+
+      if (!res.ok) {
+        throw new Error();
+      }
+
+      const newShoutout = await res.json();
+      setShoutouts((prevshout) => [newShoutout, ...prevshout]);
+    };
+
     try {
-      const payload = {
-        student_name: studentName,
-        message,
-        song_request: songRequest || "",
-        created_at: new Date().toISOString()
-      };
-
       if (isSupabaseConfigured && supabase) {
-        const { data, error } = await supabase
-          .from("shoutouts")
-          .insert([payload])
-          .select()
-          .single();
+        try {
+          const { data, error } = await supabase
+            .from("shoutouts")
+            .insert([payload])
+            .select()
+            .single();
 
-        if (error) throw error;
-        const newShoutout = data || payload;
-        setShoutouts((prevshout) => [newShoutout, ...prevshout]);
-      } else {
-        const res = await fetch("/api/shoutouts", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ student_name: studentName, message, song_request: songRequest }),
-        });
-
-        if (!res.ok) {
-          throw new Error();
+          if (error) throw error;
+          const newShoutout = data || payload;
+          setShoutouts((prevshout) => [newShoutout, ...prevshout]);
+        } catch (supaErr) {
+          console.warn("Supabase shoutouts insert failed, falling back to local server:", supaErr);
+          await saveShoutoutLocally();
         }
-
-        const newShoutout = await res.json();
-        setShoutouts((prevshout) => [newShoutout, ...prevshout]);
+      } else {
+        await saveShoutoutLocally();
       }
 
       addToast("Signal broadcasted successfully!", "success");
@@ -190,79 +215,105 @@ export default function App() {
 
   // 4. Admin Database Operations: CREATE Event
   const handleCreateEvent = async (title: string, date: string, description: string, imageUrl: string): Promise<boolean> => {
-    try {
-      const payload = {
-        title,
-        date,
-        description,
-        image_url: imageUrl || "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?auto=format&fit=crop&q=80&w=800"
-      };
+    const payload = {
+      title,
+      date,
+      description,
+      image_url: imageUrl || "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?auto=format&fit=crop&q=80&w=800"
+    };
 
-      let newEvent;
+    let newEvent;
 
-      if (isSupabaseConfigured && supabase) {
-        const { data, error } = await supabase
-          .from("events")
-          .insert([payload])
-          .select()
-          .single();
+    const saveEventLocally = async () => {
+      const token = localStorage.getItem("stahiza_auth_token");
+      const res = await fetch("/api/events", {
+        method: "POST",
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify(payload),
+      });
 
-        if (error) throw error;
-        newEvent = data || payload;
-        setEvents((prev) => [newEvent, ...prev]);
+      if (!res.ok) {
+        throw new Error();
+      }
 
-        // Sync image to gallery if configured
-        if (imageUrl) {
-          try {
-            const { data: galData, error: galErr } = await supabase
-              .from("gallery")
-              .insert([{ url: imageUrl, caption: `Flyer: ${title}`, created_at: new Date().toISOString() }])
-              .select()
-              .single();
-            if (!galErr && galData) {
-              setGallery((prev) => [galData, ...prev]);
-            }
-          } catch (e) {
-            console.error("Gallery sync ignored", e);
-          }
-        }
-      } else {
-        const token = localStorage.getItem("stahiza_auth_token");
-        const res = await fetch("/api/events", {
-          method: "POST",
-          headers: { 
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${token}`
-          },
-          body: JSON.stringify(payload),
-        });
-
-        if (!res.ok) {
-          throw new Error();
-        }
-
-        newEvent = await res.json();
-        setEvents((prev) => [newEvent, ...prev]);
-        
-        // Sync gallery fallback
-        if (imageUrl) {
-          try {
-            const galRes = await fetch("/api/gallery", {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                "Authorization": `Bearer ${token}`
-              },
-              body: JSON.stringify({ url: imageUrl, caption: `Flyer: ${title}` })
-            });
-            if (galRes.ok) {
-              const newImg = await galRes.json();
+      newEvent = await res.json();
+      setEvents((prev) => [newEvent, ...prev]);
+      
+      // Sync gallery fallback
+      if (imageUrl) {
+        try {
+          const galRes = await fetch("/api/gallery", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${token}`
+            },
+            body: JSON.stringify({ url: imageUrl, caption: `Flyer: ${title}` })
+          });
+          if (galRes.ok) {
+            const newImg = await galRes.ok ? await galRes.json() : null;
+            if (newImg) {
               setGallery((prev) => [newImg, ...prev]);
             }
-          } catch (e) {
-            console.error("Gallery sync ignored", e);
           }
+        } catch (e) {
+          console.error("Gallery sync ignored", e);
         }
+      }
+    };
+
+    try {
+      if (isSupabaseConfigured && supabase) {
+        try {
+          const { data, error } = await supabase
+            .from("events")
+            .insert([payload])
+            .select()
+            .single();
+
+          if (error) throw error;
+          newEvent = data || payload;
+          setEvents((prev) => [newEvent, ...prev]);
+
+          // Sync image to gallery if configured
+          if (imageUrl) {
+            try {
+              const { data: galData, error: galErr } = await supabase
+                .from("gallery")
+                .insert([{ url: imageUrl, caption: `Flyer: ${title}`, created_at: new Date().toISOString() }])
+                .select()
+                .single();
+              if (galErr) throw galErr;
+              if (galData) {
+                setGallery((prev) => [galData, ...prev]);
+              }
+            } catch (e) {
+              console.warn("Supabase gallery sync failed, falling back to local storage:", e);
+              // Fallback gallery sync
+              const token = localStorage.getItem("stahiza_auth_token");
+              const galRes = await fetch("/api/gallery", {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  "Authorization": `Bearer ${token}`
+                },
+                body: JSON.stringify({ url: imageUrl, caption: `Flyer: ${title}` })
+              });
+              if (galRes.ok) {
+                const newImg = await galRes.json();
+                setGallery((prev) => [newImg, ...prev]);
+              }
+            }
+          }
+        } catch (supaErr) {
+          console.warn("Supabase event creation failed, falling back to local server:", supaErr);
+          await saveEventLocally();
+        }
+      } else {
+        await saveEventLocally();
       }
 
       addToast("Gathering published & broadcast live!", "success");
@@ -275,35 +326,44 @@ export default function App() {
 
   // 5. Admin Database Operations: EDIT Event
   const handleEditEvent = async (id: string, title: string, date: string, description: string, imageUrl: string): Promise<boolean> => {
+    const editEventLocally = async () => {
+      const token = localStorage.getItem("stahiza_auth_token");
+      const res = await fetch(`/api/events/${id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify({ title, date, description, image_url: imageUrl }),
+      });
+
+      if (!res.ok) {
+        throw new Error();
+      }
+
+      const updated = await res.json();
+      setEvents((prev) => prev.map((e) => (e.id === id ? updated : e)));
+    };
+
     try {
       if (isSupabaseConfigured && supabase) {
-        const { data, error } = await supabase
-          .from("events")
-          .update({ title, date, description, image_url: imageUrl })
-          .eq("id", id)
-          .select()
-          .single();
+        try {
+          const { data, error } = await supabase
+            .from("events")
+            .update({ title, date, description, image_url: imageUrl })
+            .eq("id", id)
+            .select()
+            .single();
 
-        if (error) throw error;
-        const updated = data || { id, title, date, description, image_url: imageUrl };
-        setEvents((prev) => prev.map((e) => (e.id === id ? updated : e)));
-      } else {
-        const token = localStorage.getItem("stahiza_auth_token");
-        const res = await fetch(`/api/events/${id}`, {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${token}`
-          },
-          body: JSON.stringify({ title, date, description, image_url: imageUrl }),
-        });
-
-        if (!res.ok) {
-          throw new Error();
+          if (error) throw error;
+          const updated = data || { id, title, date, description, image_url: imageUrl };
+          setEvents((prev) => prev.map((e) => (e.id === id ? updated : e)));
+        } catch (supaErr) {
+          console.warn("Supabase event update failed, falling back to local server:", supaErr);
+          await editEventLocally();
         }
-
-        const updated = await res.json();
-        setEvents((prev) => prev.map((e) => (e.id === id ? updated : e)));
+      } else {
+        await editEventLocally();
       }
 
       addToast("Central event parameters altered of record.", "success");
@@ -316,24 +376,33 @@ export default function App() {
 
   // 6. Admin Database Operations: DELETE Event
   const handleDeleteEvent = async (id: string): Promise<boolean> => {
+    const deleteEventLocally = async () => {
+      const token = localStorage.getItem("stahiza_auth_token");
+      const res = await fetch(`/api/events/${id}`, {
+        method: "DELETE",
+        headers: { "Authorization": `Bearer ${token}` },
+      });
+
+      if (!res.ok) {
+        throw new Error();
+      }
+    };
+
     try {
       if (isSupabaseConfigured && supabase) {
-        const { error } = await supabase
-          .from("events")
-          .delete()
-          .eq("id", id);
+        try {
+          const { error } = await supabase
+            .from("events")
+            .delete()
+            .eq("id", id);
 
-        if (error) throw error;
-      } else {
-        const token = localStorage.getItem("stahiza_auth_token");
-        const res = await fetch(`/api/events/${id}`, {
-          method: "DELETE",
-          headers: { "Authorization": `Bearer ${token}` },
-        });
-
-        if (!res.ok) {
-          throw new Error();
+          if (error) throw error;
+        } catch (supaErr) {
+          console.warn("Supabase event delete failed, falling back to local server:", supaErr);
+          await deleteEventLocally();
         }
+      } else {
+        await deleteEventLocally();
       }
 
       setEvents((prev) => prev.filter((e) => e.id !== id));
@@ -347,24 +416,33 @@ export default function App() {
 
   // 7. Admin Database Operations: DELETE Inappropriate Shoutout
   const handleDeleteShoutout = async (id: string): Promise<boolean> => {
+    const deleteShoutoutLocally = async () => {
+      const token = localStorage.getItem("stahiza_auth_token");
+      const res = await fetch(`/api/shoutouts/${id}`, {
+        method: "DELETE",
+        headers: { "Authorization": `Bearer ${token}` },
+      });
+
+      if (!res.ok) {
+        throw new Error();
+      }
+    };
+
     try {
       if (isSupabaseConfigured && supabase) {
-        const { error } = await supabase
-          .from("shoutouts")
-          .delete()
-          .eq("id", id);
+        try {
+          const { error } = await supabase
+            .from("shoutouts")
+            .delete()
+            .eq("id", id);
 
-        if (error) throw error;
-      } else {
-        const token = localStorage.getItem("stahiza_auth_token");
-        const res = await fetch(`/api/shoutouts/${id}`, {
-          method: "DELETE",
-          headers: { "Authorization": `Bearer ${token}` },
-        });
-
-        if (!res.ok) {
-          throw new Error();
+          if (error) throw error;
+        } catch (supaErr) {
+          console.warn("Supabase shoutout delete failed, falling back to local server:", supaErr);
+          await deleteShoutoutLocally();
         }
+      } else {
+        await deleteShoutoutLocally();
       }
 
       setShoutouts((prev) => prev.filter((s) => s.id !== id));
@@ -377,35 +455,44 @@ export default function App() {
   };
 
   // 8. Admin Database Operations: CREATE Gallery Image
-  const handleAddGalleryImage = async (url: string, caption: string): Promise<boolean> => {
+  const handleAddGalleryImage = async (url: string, caption?: string): Promise<boolean> => {
+    const payload = { 
+      url, 
+      caption: (caption || "").trim() || "Independent Broadcast", 
+      created_at: new Date().toISOString() 
+    };
+
+    const saveGalleryLocally = async () => {
+      const token = localStorage.getItem("stahiza_auth_token");
+      const res = await fetch("/api/gallery", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify(payload)
+      });
+      if (!res.ok) throw new Error();
+      const newImg = await res.json();
+      setGallery((prev) => [newImg, ...prev]);
+    };
+
     try {
-      const payload = { 
-        url, 
-        caption: caption.trim() || "Independent Broadcast", 
-        created_at: new Date().toISOString() 
-      };
-      
       if (isSupabaseConfigured && supabase) {
-        const { data, error } = await supabase
-          .from("gallery")
-          .insert([payload])
-          .select()
-          .single();
-        if (error) throw error;
-        setGallery((prev) => [data || payload, ...prev]);
+        try {
+          const { data, error } = await supabase
+            .from("gallery")
+            .insert([payload])
+            .select()
+            .single();
+          if (error) throw error;
+          setGallery((prev) => [data || payload, ...prev]);
+        } catch (supaErr) {
+          console.warn("Supabase gallery insert failed, falling back to local server storage:", supaErr);
+          await saveGalleryLocally();
+        }
       } else {
-        const token = localStorage.getItem("stahiza_auth_token");
-        const res = await fetch("/api/gallery", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${token}`
-          },
-          body: JSON.stringify(payload)
-        });
-        if (!res.ok) throw new Error();
-        const newImg = await res.json();
-        setGallery((prev) => [newImg, ...prev]);
+        await saveGalleryLocally();
       }
       addToast("High-tech image broadcasted to gallery grid!", "success");
       return true;
@@ -417,20 +504,29 @@ export default function App() {
 
   // 9. Admin Database Operations: DELETE Gallery Image
   const handleDeleteGalleryImage = async (id: string): Promise<boolean> => {
+    const deleteGalleryLocally = async () => {
+      const token = localStorage.getItem("stahiza_auth_token");
+      const res = await fetch(`/api/gallery/${id}`, {
+        method: "DELETE",
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      if (!res.ok) throw new Error();
+    };
+
     try {
       if (isSupabaseConfigured && supabase) {
-        const { error } = await supabase
-          .from("gallery")
-          .delete()
-          .eq("id", id);
-        if (error) throw error;
+        try {
+          const { error } = await supabase
+            .from("gallery")
+            .delete()
+            .eq("id", id);
+          if (error) throw error;
+        } catch (supaErr) {
+          console.warn("Supabase gallery delete failed, falling back to local server:", supaErr);
+          await deleteGalleryLocally();
+        }
       } else {
-        const token = localStorage.getItem("stahiza_auth_token");
-        const res = await fetch(`/api/gallery/${id}`, {
-          method: "DELETE",
-          headers: { "Authorization": `Bearer ${token}` }
-        });
-        if (!res.ok) throw new Error();
+        await deleteGalleryLocally();
       }
       setGallery((prev) => prev.filter((img) => img.id !== id));
       addToast("Gallery capture purged from main archives.", "success");

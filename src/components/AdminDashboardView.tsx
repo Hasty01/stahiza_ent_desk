@@ -18,7 +18,7 @@ interface AdminDashboardProps {
   onEditEvent: (id: string, title: string, date: string, description: string, imageUrl: string) => Promise<boolean>;
   onDeleteEvent: (id: string) => Promise<boolean>;
   onDeleteShoutout: (id: string) => Promise<boolean>;
-  onAddGalleryImage: (url: string, caption: string) => Promise<boolean>;
+  onAddGalleryImage: (url: string, caption?: string) => Promise<boolean>;
   onDeleteGalleryImage: (id: string) => Promise<boolean>;
 }
 
