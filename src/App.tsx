@@ -84,13 +84,21 @@ export default function App() {
           if (isSupabaseConfigured && supabase) {
             const { data, error } = await supabase.from("gallery").select("*").order("created_at", { ascending: false });
             if (error) throw error;
-            galRes = data || [];
+            const rawGal = data || [];
+            galRes = rawGal.map((img: any) => ({
+              ...img,
+              url: img.url || img.image_url
+            }));
           } else {
             throw new Error("Supabase is not configured yet");
           }
         } catch (err) {
           console.warn("Using local gallery sandbox database fallback:", err);
-          galRes = await fetch("/api/gallery").then(r => r.json()).catch(() => []);
+          const rawLocalGal = await fetch("/api/gallery").then(r => r.json()).catch(() => []);
+          galRes = rawLocalGal.map((img: any) => ({
+            ...img,
+            url: img.url || img.image_url
+          }));
         }
 
         setEvents(eventsRes);
@@ -456,11 +464,8 @@ export default function App() {
 
   // 8. Admin Database Operations: CREATE Gallery Image
   const handleAddGalleryImage = async (url: string, caption?: string): Promise<boolean> => {
-    const payload = { 
-      url, 
-      caption: (caption || "").trim() || "Independent Broadcast", 
-      created_at: new Date().toISOString() 
-    };
+    const defaultCaption = (caption || "").trim() || "Independent Broadcast";
+    const timestamp = new Date().toISOString();
 
     const saveGalleryLocally = async () => {
       const token = localStorage.getItem("stahiza_auth_token");
@@ -470,24 +475,70 @@ export default function App() {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${token}`
         },
-        body: JSON.stringify(payload)
+        body: JSON.stringify({ 
+          url, 
+          caption: defaultCaption, 
+          created_at: timestamp 
+        })
       });
       if (!res.ok) throw new Error();
       const newImg = await res.json();
-      setGallery((prev) => [newImg, ...prev]);
+      const normalizedImg = {
+        ...newImg,
+        url: newImg.url || newImg.image_url
+      };
+      setGallery((prev) => [normalizedImg, ...prev]);
     };
 
     try {
       if (isSupabaseConfigured && supabase) {
         try {
+          // Attempt inserting with standard frontend 'url' column
           const { data, error } = await supabase
             .from("gallery")
-            .insert([payload])
+            .insert([{
+              url,
+              caption: defaultCaption,
+              created_at: timestamp
+            }])
             .select()
             .single();
-          if (error) throw error;
-          setGallery((prev) => [data || payload, ...prev]);
-        } catch (supaErr) {
+
+          if (error) {
+            // Check if failure is due to missing 'url' column (or relation/schema issue)
+            const isColumnError = error.message?.toLowerCase().includes("column") || 
+                                  error.message?.toLowerCase().includes("url") || 
+                                  error.code === "PGRST204" || 
+                                  error.code === "42703";
+            if (isColumnError) {
+              console.warn("Table schema mismatch detected on 'url' column. Attempting insert fallback with 'image_url' column...");
+              const { data: retryData, error: retryError } = await supabase
+                .from("gallery")
+                .insert([{
+                  image_url: url,
+                  caption: defaultCaption,
+                  created_at: timestamp
+                }])
+                .select()
+                .single();
+
+              if (retryError) throw retryError;
+              const normalized = retryData || { id: `gal-${Date.now()}`, image_url: url, caption: defaultCaption, created_at: timestamp };
+              setGallery((prev) => [
+                { ...normalized, url: normalized.url || normalized.image_url },
+                ...prev
+              ]);
+            } else {
+              throw error;
+            }
+          } else {
+            const normalized = data || { id: `gal-${Date.now()}`, url, caption: defaultCaption, created_at: timestamp };
+            setGallery((prev) => [
+              { ...normalized, url: normalized.url || normalized.image_url },
+              ...prev
+            ]);
+          }
+        } catch (supaErr: any) {
           console.warn("Supabase gallery insert failed, falling back to local server storage:", supaErr);
           await saveGalleryLocally();
         }
@@ -496,8 +547,9 @@ export default function App() {
       }
       addToast("High-tech image broadcasted to gallery grid!", "success");
       return true;
-    } catch (e) {
-      addToast("Failed to upload image. Check auth clearance.", "error");
+    } catch (e: any) {
+      console.error("Gallery commit fault:", e);
+      addToast(`Failed to upload image. Check auth clearance. ${e?.message || ""}`, "error");
       return false;
     }
   };

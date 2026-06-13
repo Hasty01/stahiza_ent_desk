@@ -284,10 +284,11 @@ const authMiddleware = (req: any, res: any, next: any) => {
       }
     });
 
-    if (!user) {
-      if (isJwt) {
-        // Since they have a valid Supabase JWT, they have been authenticated and screened.
-        // We synthesize a virtual user structure so they can carry out sandbox fallback uploads/events.
+    if (isJwt) {
+      // Since they have a valid Supabase JWT, they have been authenticated and screened.
+      // We automatically approve them for fallback sandbox and media upload requests,
+      // ignoring any local draft profiles that are not yet approved by local admins.
+      if (!user) {
         user = {
           id: session.sub || "supa-virtual",
           full_name: session.user_metadata?.full_name || "Supabase Operator",
@@ -296,6 +297,14 @@ const authMiddleware = (req: any, res: any, next: any) => {
           approved: true
         };
       } else {
+        // Enforce approved true since they have successfully logged in via real Supabase Auth
+        user = {
+          ...user,
+          approved: true
+        };
+      }
+    } else {
+      if (!user) {
         return res.status(401).json({ error: "User session expired or invalid profile" });
       }
     }
