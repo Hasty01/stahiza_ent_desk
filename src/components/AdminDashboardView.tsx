@@ -2,11 +2,49 @@ import { useState, useRef, ChangeEvent, DragEvent, FormEvent, useEffect } from "
 import { 
   ShieldAlert, Calendar, Plus, Edit3, Trash2, LogOut, 
   Upload, Sparkles, Terminal, FileImage, ClipboardList, 
-  Check, X, Megaphone, MapPin, Music, HelpCircle, Users, UserCheck 
+  Check, X, Megaphone, MapPin, Music, HelpCircle, Users, UserCheck, Play
 } from "lucide-react";
 import { StahizaEvent, Shoutout, GalleryImage } from "../types";
 import { supabase, isSupabaseConfigured } from "../lib/supabase";
 import ApprovalQueue from "./ApprovalQueue";
+
+// Helper to check if a URL represents a video
+function isVideoUrl(url: string): boolean {
+  if (!url) return false;
+  const cleanUrl = url.toLowerCase().split('?')[0].split('#')[0];
+  if (
+    cleanUrl.endsWith('.mp4') || 
+    cleanUrl.endsWith('.webm') || 
+    cleanUrl.endsWith('.ogg') || 
+    cleanUrl.endsWith('.mov') || 
+    cleanUrl.endsWith('.m4v') ||
+    cleanUrl.endsWith('.quicktime')
+  ) {
+    return true;
+  }
+  if (
+    url.includes('youtube.com/watch') || 
+    url.includes('youtu.be/') || 
+    url.includes('youtube.com/embed/') || 
+    url.includes('vimeo.com/')
+  ) {
+    return true;
+  }
+  if (url.startsWith('data:video/')) {
+    return true;
+  }
+  return false;
+}
+
+// Extract YouTube ID and return quality thumbnail
+function getVideoThumbnail(url: string, defaultFallback: string = ""): string {
+  if (!url) return defaultFallback;
+  const match = url.match(/(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/i);
+  if (match && match[1]) {
+    return `https://img.youtube.com/vi/${match[1]}/hqdefault.jpg`;
+  }
+  return defaultFallback;
+}
 
 interface AdminDashboardProps {
   events: StahizaEvent[];
@@ -197,8 +235,11 @@ export default function AdminDashboardView({
   const galleryFileInputRef = useRef<HTMLInputElement>(null);
 
   const uploadGalleryFile = async (file: File) => {
-    if (file.size > 5 * 1024 * 1024) {
-      setFormError("File exceeds 5MB limit threshold!");
+    const isVid = file.type.startsWith("video/") || /\.(mp4|webm|mov|ogg|m4v)$/i.test(file.name);
+    const limit = isVid ? 20 * 1024 * 1024 : 5 * 1024 * 1024;
+    
+    if (file.size > limit) {
+      setFormError(isVid ? "Video file exceeds 20MB limit threshold!" : "File exceeds 5MB limit threshold!");
       return;
     }
     setGalleryUploadLoading(true);
@@ -233,7 +274,7 @@ export default function AdminDashboardView({
             }
 
             setGalleryImgUrl(data.url);
-            setFormSuccess("Gallery image ready in pool preview!");
+            setFormSuccess(isVid ? "Gallery video ready in pool preview!" : "Gallery image ready in pool preview!");
             setTimeout(() => setFormSuccess(""), 4000);
             resolve();
           } catch (err: any) {
@@ -274,7 +315,7 @@ export default function AdminDashboardView({
         }
 
         setGalleryImgUrl(publicUrlData.publicUrl);
-        setFormSuccess("Gallery image upload succeeded in Supabase storage!");
+        setFormSuccess(isVid ? "Gallery video upload succeeded in Supabase storage!" : "Gallery image upload succeeded in Supabase storage!");
         setTimeout(() => setFormSuccess(""), 4000);
       } catch (err: any) {
         console.warn("Supabase upload failed, falling back to local server storage:", err);
@@ -1061,7 +1102,7 @@ export default function AdminDashboardView({
               {/* Caption */}
               <div className="space-y-1.5">
                 <label className="text-[10px] font-mono font-bold uppercase tracking-widest text-gray-400 block">
-                  Image Caption / Vibe Title
+                  Caption / Vibe Title
                 </label>
                 <input
                   type="text"
@@ -1072,10 +1113,10 @@ export default function AdminDashboardView({
                 />
               </div>
 
-              {/* Image Drag/Drop & File Pick */}
+              {/* Image & Video Drag/Drop & File Pick */}
               <div className="space-y-1.5">
                 <label className="text-[10px] font-mono font-bold uppercase tracking-widest text-gray-400 block flex items-center justify-between">
-                  <span>Photo Asset</span>
+                  <span>Media Asset</span>
                   <span className="text-[9px] text-neon-cyan font-normal uppercase">Automatic Linker</span>
                 </label>
                 
@@ -1087,14 +1128,14 @@ export default function AdminDashboardView({
                   <input
                     type="file"
                     ref={galleryFileInputRef}
-                    accept="image/*"
+                    accept="image/*,video/*"
                     onChange={handleGalleryFileChange}
                     className="hidden"
                   />
                   <div className="flex flex-col items-center justify-center gap-1" onClick={() => galleryFileInputRef.current?.click()}>
                     <Upload className="w-6 h-6 text-gray-500 group-hover:text-neon-purple-hover animate-pulse transition-colors" />
-                    <span className="text-xs text-gray-300 font-medium">Select Image file or Drop</span>
-                    <span className="text-[9px] text-gray-500 font-mono text-center">Max 5MB. Writes to sandbox developer disk.</span>
+                    <span className="text-xs text-gray-300 font-medium">Select Image/Video file or Drop</span>
+                    <span className="text-[9px] text-gray-500 font-mono text-center">Max size: 5MB image / 20MB video. Sandbox-saved.</span>
                   </div>
 
                   {galleryUploadLoading && (
@@ -1105,36 +1146,53 @@ export default function AdminDashboardView({
                   )}
                 </div>
 
-                {/* Direct Image URL fallback input */}
+                {/* Direct Image/Video URL fallback input */}
                 <div className="space-y-1 pt-1.5">
-                  <span className="text-[9px] font-mono text-gray-500">Or assign direct URL manually:</span>
+                  <span className="text-[9px] font-mono text-gray-500">Or assign direct URL manually (Image, MP4 or YouTube):</span>
                   <input
                     type="url"
-                    placeholder="https://images.unsplash.com/..."
+                    placeholder="https://images.unsplash.com/... or https://youtube.com/watch?v=..."
                     value={galleryImgUrl}
                     onChange={(e) => setGalleryImgUrl(e.target.value)}
                     className="w-full bg-dark-bg border border-dark-border rounded-xl px-3 py-1.5 text-xs text-white focus:outline-hidden"
                   />
                 </div>
 
-                {/* Active Image Preview */}
+                {/* Active Image/Video Preview */}
                 {galleryImgUrl && (
-                  <div className="relative aspect-square rounded-xl overflow-hidden border border-dark-border mt-2 group bg-dark-bg">
-                    <img
-                      src={galleryImgUrl}
-                      alt="Gallery Preview"
-                      referrerPolicy="no-referrer"
-                      className="w-full h-full object-cover"
-                    />
+                  <div className="relative aspect-square rounded-xl overflow-hidden border border-dark-border mt-2 group bg-dark-bg flex items-center justify-center">
+                    {isVideoUrl(galleryImgUrl) ? (
+                      galleryImgUrl.includes("youtube.com") || galleryImgUrl.includes("youtu.be") ? (
+                        <img
+                          src={getVideoThumbnail(galleryImgUrl)}
+                          alt="YouTube video snapshot preview"
+                          referrerPolicy="no-referrer"
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <video
+                          src={galleryImgUrl}
+                          controls
+                          className="w-full h-full object-cover"
+                        />
+                      )
+                    ) : (
+                      <img
+                        src={galleryImgUrl}
+                        alt="Gallery Preview"
+                        referrerPolicy="no-referrer"
+                        className="w-full h-full object-cover"
+                      />
+                    )}
                     <button
                       type="button"
                       onClick={() => setGalleryImgUrl("")}
-                      className="absolute top-2 right-2 p-1 bg-black/70 rounded-full border border-white/10 text-neon-pink"
+                      className="absolute top-2 right-2 p-1 bg-black/70 rounded-full border border-white/10 text-neon-pink z-10"
                     >
                       <X className="w-3.5 h-3.5" />
                     </button>
-                    <div className="absolute bottom-2 left-2 px-2 py-0.5 bg-black/80 rounded-md border border-neon-cyan/20 text-[8px] font-mono text-neon-cyan animate-pulse">
-                      Preview Active
+                    <div className="absolute bottom-2 left-2 px-2 py-0.5 bg-black/80 rounded-md border border-neon-cyan/20 text-[8px] font-mono text-neon-cyan animate-pulse z-10">
+                      Preview Active {isVideoUrl(galleryImgUrl) ? "(VIDEO)" : "(IMAGE)"}
                     </div>
                   </div>
                 )}
@@ -1147,7 +1205,7 @@ export default function AdminDashboardView({
                 className="w-full py-2.5 bg-neon-purple hover:bg-neon-purple-hover text-white rounded-xl text-xs font-mono font-bold uppercase tracking-wider shadow-md shadow-neon-purple/20 flex items-center justify-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
               >
                 <Plus className="w-3.5 h-3.5" />
-                {submitting ? "Broadcasting..." : "Publish Image to Deck"}
+                {submitting ? "Broadcasting..." : "Publish Media to Deck"}
               </button>
             </form>
           </div>
@@ -1164,40 +1222,65 @@ export default function AdminDashboardView({
               </div>
             ) : (
               <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-                {gallery.map((img) => (
-                  <div
-                    key={img.id}
-                    className="group bg-dark-bg/60 border border-dark-border rounded-2xl overflow-hidden relative aspect-square transition-all duration-300 hover:border-dark-border"
-                  >
-                    <img
-                      src={img.url}
-                      alt={img.caption}
-                      referrerPolicy="no-referrer"
-                      className="w-full h-full object-cover"
-                    />
-                    <div className="absolute inset-0 bg-black/80 opacity-0 group-hover:opacity-100 transition-all flex flex-col justify-between p-3">
-                      <button
-                        onClick={async () => {
-                          if (confirm(`Confirm physical deletion of gallery image: "${img.caption || "Untitled"}"?`)) {
-                            await onDeleteGalleryImage(img.id);
-                          }
-                        }}
-                        className="self-end p-1.5 bg-neon-pink/15 hover:bg-neon-pink border border-neon-pink/30 hover:border-neon-pink text-neon-pink hover:text-white rounded-lg transition-all"
-                        title="Delete Capture"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                      <div>
-                        <p className="text-white text-xs font-bold font-display line-clamp-2 leading-tight">
-                          {img.caption || "Live Broadcast"}
-                        </p>
-                        <p className="text-[8px] font-mono text-neon-cyan mt-1">
-                          {new Date(img.created_at).toLocaleDateString()}
-                        </p>
+                {gallery.map((img) => {
+                  const isVid = isVideoUrl(img.url);
+                  const isYoutube = img.url.includes("youtube.com") || img.url.includes("youtu.be");
+                  const thumbUrl = isYoutube ? getVideoThumbnail(img.url, img.url) : img.url;
+
+                  return (
+                    <div
+                      key={img.id}
+                      className="group bg-dark-bg/60 border border-dark-border rounded-2xl overflow-hidden relative aspect-square transition-all duration-300 hover:border-dark-border"
+                    >
+                      {isVid && !isYoutube ? (
+                        <video
+                          src={img.url}
+                          muted
+                          playsInline
+                          preload="metadata"
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <img
+                          src={thumbUrl}
+                          alt={img.caption || "Live Broadcast"}
+                          referrerPolicy="no-referrer"
+                          className="w-full h-full object-cover"
+                        />
+                      )}
+
+                      {/* Video Tag Overlay */}
+                      {isVid && (
+                        <div className="absolute top-2 left-2 px-1.5 py-0.5 bg-black/80 rounded-md border border-white/10 text-[8px] font-mono font-bold text-cyan-400 flex items-center gap-1 z-10 shadow-sm">
+                          <Play className="w-2.5 h-2.5 fill-cyan-400 text-cyan-400" />
+                          <span>VIDEO</span>
+                        </div>
+                      )}
+
+                      <div className="absolute inset-0 bg-black/80 opacity-0 group-hover:opacity-100 transition-all flex flex-col justify-between p-3 z-10">
+                        <button
+                          onClick={async () => {
+                            if (confirm(`Confirm physical deletion of gallery media: "${img.caption || "Untitled"}"?`)) {
+                              await onDeleteGalleryImage(img.id);
+                            }
+                          }}
+                          className="self-end p-1.5 bg-neon-pink/15 hover:bg-neon-pink border border-neon-pink/30 hover:border-neon-pink text-neon-pink hover:text-white rounded-lg transition-all"
+                          title="Delete Media"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                        <div>
+                          <p className="text-white text-xs font-bold font-display line-clamp-2 leading-tight">
+                            {img.caption || "Live Broadcast"}
+                          </p>
+                          <p className="text-[8px] font-mono text-neon-cyan mt-1">
+                            {new Date(img.created_at).toLocaleDateString()}
+                          </p>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>

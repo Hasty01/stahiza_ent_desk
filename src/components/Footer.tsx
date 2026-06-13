@@ -7,7 +7,7 @@ interface FooterProps {
 export default function Footer({ onNavigate }: FooterProps) {
   return (
     <footer id="app-footer" className="bg-dark-card border-t border-dark-border mt-16 px-4 py-12 sm:px-8 font-sans">
-      <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-8">
+      <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-8">
         
         {/* Info Col */}
         <div className="flex flex-col gap-3">
@@ -47,25 +47,6 @@ export default function Footer({ onNavigate }: FooterProps) {
               </button>
             </li>
           </ul>
-        </div>
-
-        {/* Tech Specs Col */}
-        <div className="flex flex-col gap-3">
-          <h4 className="font-mono text-xs text-neon-green uppercase tracking-widest">System Architecture</h4>
-          <p className="text-xs text-gray-500 font-mono leading-relaxed">
-            API Platform: React + Express (Port 3000)<br />
-            Supabase SDK Connector: Enabled (Schema pre-coded)<br />
-            Animations: Motion + Tailwind v4 CSS
-          </p>
-          <div className="flex items-center gap-2 mt-1">
-            <button
-              onClick={() => onNavigate("admin-login")}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-dark-bg hover:bg-neon-purple/10 border border-dark-border hover:border-neon-purple/40 rounded-lg text-[10px] font-mono text-gray-400 hover:text-white transition-all"
-            >
-              <ShieldCheck className="w-3.5 h-3.5 text-neon-purple" />
-              Admin Panel
-            </button>
-          </div>
         </div>
       </div>
 

@@ -493,50 +493,88 @@ export default function App() {
     try {
       if (isSupabaseConfigured && supabase) {
         try {
-          // Attempt inserting with standard frontend 'url' column
-          const { data, error } = await supabase
-            .from("gallery")
-            .insert([{
-              url,
-              caption: defaultCaption,
-              created_at: timestamp
-            }])
-            .select()
-            .single();
+          let insertSuccess = false;
+          let insertionData: any = null;
 
-          if (error) {
-            // Check if failure is due to missing 'url' column (or relation/schema issue)
-            const isColumnError = error.message?.toLowerCase().includes("column") || 
-                                  error.message?.toLowerCase().includes("url") || 
-                                  error.code === "PGRST204" || 
-                                  error.code === "42703";
-            if (isColumnError) {
-              console.warn("Table schema mismatch detected on 'url' column. Attempting insert fallback with 'image_url' column...");
-              const { data: retryData, error: retryError } = await supabase
-                .from("gallery")
-                .insert([{
-                  image_url: url,
-                  caption: defaultCaption,
-                  created_at: timestamp
-                }])
-                .select()
-                .single();
-
-              if (retryError) throw retryError;
-              const normalized = retryData || { id: `gal-${Date.now()}`, image_url: url, caption: defaultCaption, created_at: timestamp };
-              setGallery((prev) => [
-                { ...normalized, url: normalized.url || normalized.image_url },
-                ...prev
-              ]);
+          // Cascade combination retry attempts to bypass missing database columns or stale schema caches
+          
+          // Try 1: Ideal model schema ('url' and 'caption')
+          try {
+            const { data, error } = await supabase
+              .from("gallery")
+              .insert([{ url, caption: defaultCaption, created_at: timestamp }])
+              .select()
+              .single();
+            if (!error) {
+              insertionData = data;
+              insertSuccess = true;
             } else {
               throw error;
             }
-          } else {
-            const normalized = data || { id: `gal-${Date.now()}`, url, caption: defaultCaption, created_at: timestamp };
+          } catch (e1) {
+            console.warn("Gallery insert attempt 1 (url + caption) failed, trying configuration 2:", e1);
+            
+            // Try 2: Alternative standard schema ('image_url' and 'caption')
+            try {
+              const { data, error } = await supabase
+                .from("gallery")
+                .insert([{ image_url: url, caption: defaultCaption, created_at: timestamp }])
+                .select()
+                .single();
+              if (!error) {
+                insertionData = data;
+                insertSuccess = true;
+              } else {
+                throw error;
+              }
+            } catch (e2) {
+              console.warn("Gallery insert attempt 2 (image_url + caption) failed, trying configuration 3:", e2);
+              
+              // Try 3: Caption-less backup with alternative column ('image_url' only)
+              try {
+                const { data, error } = await supabase
+                  .from("gallery")
+                  .insert([{ image_url: url, created_at: timestamp }])
+                  .select()
+                  .single();
+                if (!error) {
+                  insertionData = data;
+                  insertSuccess = true;
+                } else {
+                  throw error;
+                }
+              } catch (e3) {
+                console.warn("Gallery insert attempt 3 (image_url only) failed, trying configuration 4:", e3);
+                
+                // Try 4: Caption-less backup with standard column ('url' only)
+                try {
+                  const { data, error } = await supabase
+                    .from("gallery")
+                    .insert([{ url, created_at: timestamp }])
+                    .select()
+                    .single();
+                  if (!error) {
+                    insertionData = data;
+                    insertSuccess = true;
+                  } else {
+                    throw error;
+                  }
+                } catch (e4) {
+                  console.error("All dynamic Supabase insert combinations failed:", e4);
+                  throw e4;
+                }
+              }
+            }
+          }
+
+          if (insertSuccess) {
+            const normalized = insertionData || { id: `gal-${Date.now()}`, url, caption: defaultCaption, created_at: timestamp };
             setGallery((prev) => [
-              { ...normalized, url: normalized.url || normalized.image_url },
+              { ...normalized, url: normalized.url || normalized.image_url, caption: normalized.caption || defaultCaption },
               ...prev
             ]);
+          } else {
+            throw new Error("Unable to establish table insertion with active schema properties.");
           }
         } catch (supaErr: any) {
           console.warn("Supabase gallery insert failed, falling back to local server storage:", supaErr);
@@ -595,7 +633,7 @@ export default function App() {
         {preloaderActive && (
           <FuturisticDJPreloader onLoaded={() => {
             setPreloaderActive(false);
-            navigateTo("admin-dashboard");
+            navigateTo("home");
           }} />
         )}
       </AnimatePresence>

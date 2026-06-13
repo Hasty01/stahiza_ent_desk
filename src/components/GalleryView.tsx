@@ -1,7 +1,54 @@
 import { useState, MouseEvent } from "react";
-import { Image as ImageIcon, X, ChevronLeft, ChevronRight, Maximize2, Calendar, ZoomIn } from "lucide-react";
+import { Image as ImageIcon, X, ChevronLeft, ChevronRight, Maximize2, Calendar, ZoomIn, Play, Film } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { GalleryImage } from "../types";
+
+// Helper to check if a URL represents a video
+function isVideoUrl(url: string): boolean {
+  if (!url) return false;
+  const cleanUrl = url.toLowerCase().split('?')[0].split('#')[0];
+  if (
+    cleanUrl.endsWith('.mp4') || 
+    cleanUrl.endsWith('.webm') || 
+    cleanUrl.endsWith('.ogg') || 
+    cleanUrl.endsWith('.mov') || 
+    cleanUrl.endsWith('.m4v') ||
+    cleanUrl.endsWith('.quicktime')
+  ) {
+    return true;
+  }
+  if (
+    url.includes('youtube.com/watch') || 
+    url.includes('youtu.be/') || 
+    url.includes('youtube.com/embed/') || 
+    url.includes('vimeo.com/')
+  ) {
+    return true;
+  }
+  if (url.startsWith('data:video/')) {
+    return true;
+  }
+  return false;
+}
+
+// Extract YouTube ID and return quality thumbnail
+function getVideoThumbnail(url: string, defaultFallback: string = ""): string {
+  if (!url) return defaultFallback;
+  const match = url.match(/(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/i);
+  if (match && match[1]) {
+    return `https://img.youtube.com/vi/${match[1]}/hqdefault.jpg`;
+  }
+  return defaultFallback;
+}
+
+// Convert video URL to an iframe embed code for YouTube
+function getYoutubeEmbedUrl(url: string) {
+  const match = url.match(/(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/i);
+  if (match && match[1]) {
+    return `https://www.youtube.com/embed/${match[1]}?autoplay=1`;
+  }
+  return url;
+}
 
 interface GalleryViewProps {
   gallery: GalleryImage[];
@@ -48,39 +95,63 @@ export default function GalleryView({ gallery }: GalleryViewProps) {
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-          {gallery.map((img, idx) => (
-            <motion.div
-              key={img.id}
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: Math.min(idx * 0.04, 0.4) }}
-              onClick={() => openLightbox(idx)}
-              className="group relative rounded-2xl overflow-hidden aspect-square border border-white/5 bg-white/3 cursor-pointer shadow-md hover:border-cyan-400 hover:shadow-lg hover:shadow-cyan-400/5 transition-all duration-300"
-            >
-              <img
-                src={img.url}
-                alt={img.caption || "STAHIZA event capture"}
-                referrerPolicy="no-referrer"
-                loading="lazy"
-                className="w-full h-full object-cover group-hover:scale-104 transition-transform duration-500"
-              />
-              
-              {/* Overlay on hover */}
-              <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-between p-4 z-10">
-                <div className="self-end p-1.5 bg-black/80 rounded-lg border border-white/10 text-white">
-                  <Maximize2 className="w-3.5 h-3.5" />
+          {gallery.map((img, idx) => {
+            const isVideoSelected = isVideoUrl(img.url);
+            const isYoutube = img.url.includes("youtube.com") || img.url.includes("youtu.be");
+            const thumbUrl = isYoutube ? getVideoThumbnail(img.url, img.url) : img.url;
+
+            return (
+              <motion.div
+                key={img.id}
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: Math.min(idx * 0.04, 0.4) }}
+                onClick={() => openLightbox(idx)}
+                className="group relative rounded-2xl overflow-hidden aspect-square border border-white/5 bg-white/3 cursor-pointer shadow-md hover:border-cyan-400 hover:shadow-lg hover:shadow-cyan-400/5 transition-all duration-300"
+              >
+                {isVideoSelected && !isYoutube ? (
+                  <video
+                    src={img.url}
+                    muted
+                    playsInline
+                    preload="metadata"
+                    className="w-full h-full object-cover group-hover:scale-104 transition-transform duration-500"
+                  />
+                ) : (
+                  <img
+                    src={thumbUrl}
+                    alt={img.caption || "STAHIZA event capture"}
+                    referrerPolicy="no-referrer"
+                    loading="lazy"
+                    className="w-full h-full object-cover group-hover:scale-104 transition-transform duration-500"
+                  />
+                )}
+
+                {/* Video Play Badge overlay */}
+                {isVideoSelected && (
+                  <div className="absolute top-3 left-3 px-2 py-1 bg-black/80 rounded-lg border border-white/10 text-[9px] font-mono font-bold text-cyan-400 flex items-center gap-1.5 shadow-md z-10 group-hover:border-cyan-400/50 transition-colors">
+                    <Play className="w-3 h-3 fill-cyan-400 text-cyan-400" />
+                    <span>VIDEO</span>
+                  </div>
+                )}
+                
+                {/* Overlay on hover */}
+                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-between p-4 z-10">
+                  <div className="self-end p-1.5 bg-black/80 rounded-lg border border-white/10 text-white">
+                    <Maximize2 className="w-3.5 h-3.5" />
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-white text-sm font-semibold font-display line-clamp-2 leading-tight">
+                      {img.caption || "Untitled Broadcast"}
+                    </p>
+                    <span className="text-[9px] font-mono text-cyan-400 uppercase tracking-wider block">
+                      {new Date(img.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                    </span>
+                  </div>
                 </div>
-                <div className="space-y-1">
-                  <p className="text-white text-sm font-semibold font-display line-clamp-2 leading-tight">
-                    {img.caption || "Untitled Broadcast"}
-                  </p>
-                  <span className="text-[9px] font-mono text-cyan-400 uppercase tracking-wider block">
-                    {new Date(img.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
-                  </span>
-                </div>
-              </div>
-            </motion.div>
-          ))}
+              </motion.div>
+            );
+          })}
         </div>
       )}
 
@@ -115,14 +186,37 @@ export default function GalleryView({ gallery }: GalleryViewProps) {
                 <ChevronLeft className="w-6 h-6" />
               </button>
 
-              {/* Main Image frame */}
+              {/* Main Image/Video frame */}
               <div className="relative max-w-full max-h-full rounded-2xl overflow-hidden border border-white/10 bg-black/40 flex items-center justify-center shadow-2xl">
-                <img
-                  src={gallery[activeIdx].url}
-                  alt={gallery[activeIdx].caption || "STAHIZA visual projection"}
-                  referrerPolicy="no-referrer"
-                  className="max-w-full max-h-[70vh] object-contain rounded-xl select-none"
-                />
+                {isVideoUrl(gallery[activeIdx].url) ? (
+                  gallery[activeIdx].url.includes("youtube.com") || gallery[activeIdx].url.includes("youtu.be") ? (
+                    <div className="w-full max-w-4xl aspect-video rounded-xl overflow-hidden border border-white/10 bg-black">
+                      <iframe
+                        src={getYoutubeEmbedUrl(gallery[activeIdx].url)}
+                        title={gallery[activeIdx].caption || "STAHIZA YouTube Video"}
+                        frameBorder="0"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                        allowFullScreen
+                        className="w-full h-[60vh] aspect-video"
+                      ></iframe>
+                    </div>
+                  ) : (
+                    <video
+                      src={gallery[activeIdx].url}
+                      controls
+                      autoPlay
+                      referrerPolicy="no-referrer"
+                      className="max-w-full max-h-[70vh] rounded-xl select-none"
+                    />
+                  )
+                ) : (
+                  <img
+                    src={gallery[activeIdx].url}
+                    alt={gallery[activeIdx].caption || "STAHIZA visual projection"}
+                    referrerPolicy="no-referrer"
+                    className="max-w-full max-h-[70vh] object-contain rounded-xl select-none"
+                  />
+                )}
               </div>
 
               {/* Navigation Right */}

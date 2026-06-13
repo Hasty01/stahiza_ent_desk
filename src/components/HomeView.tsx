@@ -1,7 +1,45 @@
 import { useEffect, useState } from "react";
-import { Clock, Calendar, MoveRight, Music, Sparkles, Image as ImageIcon, Flame } from "lucide-react";
+import { Clock, Calendar, MoveRight, Music, Sparkles, Image as ImageIcon, Flame, Play } from "lucide-react";
 import { motion } from "motion/react";
 import { StahizaEvent, Shoutout, GalleryImage } from "../types";
+
+// Helper to check if a URL represents a video
+function isVideoUrl(url: string): boolean {
+  if (!url) return false;
+  const cleanUrl = url.toLowerCase().split('?')[0].split('#')[0];
+  if (
+    cleanUrl.endsWith('.mp4') || 
+    cleanUrl.endsWith('.webm') || 
+    cleanUrl.endsWith('.ogg') || 
+    cleanUrl.endsWith('.mov') || 
+    cleanUrl.endsWith('.m4v') ||
+    cleanUrl.endsWith('.quicktime')
+  ) {
+    return true;
+  }
+  if (
+    url.includes('youtube.com/watch') || 
+    url.includes('youtu.be/') || 
+    url.includes('youtube.com/embed/') || 
+    url.includes('vimeo.com/')
+  ) {
+    return true;
+  }
+  if (url.startsWith('data:video/')) {
+    return true;
+  }
+  return false;
+}
+
+// Extract YouTube ID and return quality thumbnail
+function getVideoThumbnail(url: string, defaultFallback: string = ""): string {
+  if (!url) return defaultFallback;
+  const match = url.match(/(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/i);
+  if (match && match[1]) {
+    return `https://img.youtube.com/vi/${match[1]}/hqdefault.jpg`;
+  }
+  return defaultFallback;
+}
 
 interface HomeViewProps {
   events: StahizaEvent[];
@@ -277,7 +315,7 @@ export default function HomeView({ events, shoutouts, gallery, onNavigate }: Hom
           <div className="space-y-1">
             <h3 className="font-display font-extrabold text-2xl sm:text-3xl text-white tracking-tight flex items-center gap-2">
               <span className="w-2.5 h-2.5 rounded-full bg-neon-purple animate-pulse"></span>
-              Highlights Reels
+              Highlights..
             </h3>
             <p className="text-sm text-gray-400">Fresh visual memories preserved from our dance halls</p>
           </div>
@@ -295,25 +333,50 @@ export default function HomeView({ events, shoutouts, gallery, onNavigate }: Hom
           </div>
         ) : (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {recentGallery.map((img) => (
-              <div 
-                key={img.id}
-                onClick={() => onNavigate("gallery")}
-                className="relative group rounded-2xl overflow-hidden aspect-video sm:aspect-square border border-white/5 bg-white/3 cursor-pointer"
-              >
-                <img
-                  src={img.url}
-                  alt={img.caption || "STAHIZA vibes"}
-                  referrerPolicy="no-referrer"
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-3 py-4">
-                  <p className="text-white text-[11px] font-medium font-display leading-tight truncate w-full">
-                    {img.caption || "View image"}
-                  </p>
+            {recentGallery.map((img) => {
+              const isVideoSelected = isVideoUrl(img.url);
+              const isYoutube = img.url.includes("youtube.com") || img.url.includes("youtu.be");
+              const thumbUrl = isYoutube ? getVideoThumbnail(img.url, img.url) : img.url;
+
+              return (
+                <div 
+                  key={img.id}
+                  onClick={() => onNavigate("gallery")}
+                  className="relative group rounded-2xl overflow-hidden aspect-video sm:aspect-square border border-white/5 bg-white/3 cursor-pointer"
+                >
+                  {isVideoSelected && !isYoutube ? (
+                    <video
+                      src={img.url}
+                      muted
+                      playsInline
+                      preload="metadata"
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                    />
+                  ) : (
+                    <img
+                      src={thumbUrl}
+                      alt={img.caption || "STAHIZA vibes"}
+                      referrerPolicy="no-referrer"
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                    />
+                  )}
+
+                  {/* Video Play Icon Indicator */}
+                  {isVideoSelected && (
+                    <div className="absolute top-3 left-3 px-2 py-1 bg-black/80 rounded-lg border border-white/10 text-[9px] font-mono font-bold text-cyan-400 flex items-center gap-1 shadow-md z-10 group-hover:border-cyan-400/50 transition-colors">
+                      <Play className="w-2.5 h-2.5 fill-cyan-400 text-cyan-400" />
+                      <span>VIDEO</span>
+                    </div>
+                  )}
+
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-3 py-4">
+                    <p className="text-white text-[11px] font-medium font-display leading-tight truncate w-full">
+                      {img.caption || "View media"}
+                    </p>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </section>
