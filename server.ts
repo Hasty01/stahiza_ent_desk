@@ -798,20 +798,20 @@ Ensure every single name, song, news title, and movie is authentic, real, and cu
       throw new Error("Empty text response from Gemini live search.");
     }
   } catch (err: any) {
-    console.warn("Exception during live Gemini trends fetching, falling back to static resources: ", err);
-    
     // Check if the failure is code 429, RESOURCE_EXHAUSTED or quota error
     const isQuotaError = err?.status === "RESOURCE_EXHAUSTED" || 
                          err?.message?.includes("quota") || 
                          err?.statusCode === 429 || 
                          err?.message?.includes("429") ||
-                         err?.toString().includes("429") ||
-                         err?.toString().includes("RESOURCE_EXHAUSTED") ||
+                         err?.toString?.().includes?.("429") ||
+                         err?.toString?.().includes?.("RESOURCE_EXHAUSTED") ||
                          (err?.status && String(err.status) === "429");
 
     if (isQuotaError) {
       lastQuotaExceededTime = Date.now();
-      console.warn("Quota exceeded / Rate-limit detected! Activated 10-minute cooldown for Gemini Trends synchronization.");
+      console.warn("Gemini Live quota limit reached (429/RESOURCE_EXHAUSTED). Falling back to premium curated static data.");
+    } else {
+      console.warn(`Unable to fetch live trends info from Gemini: ${err?.message || err}`);
     }
 
     // Write fallback structure to disk cache so we don't repeat-hammer rate limits immediately
