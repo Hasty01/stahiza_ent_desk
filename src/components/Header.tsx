@@ -21,7 +21,14 @@ export default function Header({ currentView, onNavigate, adminUser, onLogout }:
   ];
 
   return (
-    <header id="app-header" className="relative h-20 px-4 sm:px-8 flex items-center justify-between border-b border-white/5 bg-white/2 backdrop-blur-md sticky top-0 z-50">
+    <header 
+      id="app-header" 
+      className={`relative px-4 sm:px-8 border-b border-white/5 bg-white/2 backdrop-blur-md sticky top-0 z-50 transition-all duration-300 flex ${
+        mobileMenuOpen 
+          ? "h-auto py-4 flex-col justify-start items-stretch" 
+          : "h-20 flex-row items-center justify-between"
+      }`}
+    >
       {/* Top ambient color-bar gradient */}
       <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-purple-600 via-cyan-400 to-green-400 shadow-[0_0_15px_rgba(34,211,238,0.5)]"></div>
 
@@ -123,7 +130,10 @@ export default function Header({ currentView, onNavigate, adminUser, onLogout }:
             exit={{ opacity: 0, height: 0 }}
             className="md:hidden mt-4 pt-4 border-t border-dark-border overflow-hidden"
           >
-            <div className="flex flex-col gap-2">
+            <div 
+              className="flex flex-col gap-2 p-4 bg-[darkslategrey] rounded-[20px]"
+              style={{ backgroundColor: "darkslategrey", borderRadius: "20px" }}
+            >
               {navItems.map((item) => {
                 const Icon = item.icon;
                 const isActive = currentView === item.id;

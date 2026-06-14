@@ -76,6 +76,33 @@ export default function AdminDashboardView({
 }: AdminDashboardProps) {
   const [activeTab, setActiveTab] = useState<"events" | "shoutouts" | "approvals" | "gallery">("events");
 
+  // Track tab order and navigation direction for polished horizontal slide transitions
+  const tabOrder = ["events", "shoutouts", "approvals", "gallery"];
+  const prevTabRef = useRef<string>("events");
+  
+  const prevIndex = tabOrder.indexOf(prevTabRef.current);
+  const currentIndex = tabOrder.indexOf(activeTab);
+  const direction = currentIndex >= prevIndex ? 1 : -1;
+
+  useEffect(() => {
+    prevTabRef.current = activeTab;
+  }, [activeTab]);
+
+  const slideVariants = {
+    initial: (dir: number) => ({
+      opacity: 0,
+      x: dir * 35,
+    }),
+    animate: {
+      opacity: 1,
+      x: 0,
+    },
+    exit: (dir: number) => ({
+      opacity: 0,
+      x: dir * -35,
+    }),
+  };
+
   // Profile approvals states
   const [profiles, setProfiles] = useState<any[]>([]);
   const [profilesLoading, setProfilesLoading] = useState(false);
@@ -912,13 +939,15 @@ export default function AdminDashboardView({
       </div>
 
       {/* RENDER ACTIVE TAB MODULES */}
-      <AnimatePresence mode="wait">
+      <AnimatePresence mode="wait" custom={direction}>
         <motion.div
           key={activeTab}
-          initial={{ opacity: 0, y: 15 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -15 }}
-          transition={{ duration: 0.2, ease: "easeInOut" }}
+          custom={direction}
+          variants={slideVariants}
+          initial="initial"
+          animate="animate"
+          exit="exit"
+          transition={{ duration: 0.22, ease: "easeInOut" }}
           className="focus:outline-hidden"
         >
           {activeTab === "events" ? (
