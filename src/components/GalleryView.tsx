@@ -1,5 +1,5 @@
 import { useState, MouseEvent } from "react";
-import { Image as ImageIcon, X, ChevronLeft, ChevronRight, Maximize2, Calendar, ZoomIn, Play, Film } from "lucide-react";
+import { Image as ImageIcon, X, ChevronLeft, ChevronRight, Maximize2, Calendar, ZoomIn, Play, Film, Minimize2, ZoomOut } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { GalleryImage } from "../types";
 
@@ -56,25 +56,30 @@ interface GalleryViewProps {
 
 export default function GalleryView({ gallery }: GalleryViewProps) {
   const [activeIdx, setActiveIdx] = useState<number | null>(null);
+  const [isImmersive, setIsImmersive] = useState<boolean>(false);
 
   const openLightbox = (index: number) => {
     setActiveIdx(index);
+    setIsImmersive(false);
   };
 
   const closeLightbox = () => {
     setActiveIdx(null);
+    setIsImmersive(false);
   };
 
   const prevImage = (e?: MouseEvent) => {
     e?.stopPropagation();
     if (activeIdx === null) return;
     setActiveIdx((prev) => (prev !== null && prev > 0 ? prev - 1 : gallery.length - 1));
+    setIsImmersive(false);
   };
 
   const nextImage = (e?: MouseEvent) => {
     e?.stopPropagation();
     if (activeIdx === null) return;
     setActiveIdx((prev) => (prev !== null && prev < gallery.length - 1 ? prev + 1 : 0));
+    setIsImmersive(false);
   };
 
   return (
@@ -107,7 +112,7 @@ export default function GalleryView({ gallery }: GalleryViewProps) {
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ delay: Math.min(idx * 0.04, 0.4) }}
                 onClick={() => openLightbox(idx)}
-                className="group relative rounded-2xl overflow-hidden aspect-square border border-white/5 bg-white/3 cursor-pointer shadow-md hover:border-cyan-400 hover:shadow-lg hover:shadow-cyan-400/5 transition-all duration-300"
+                className="group relative rounded-2xl overflow-hidden aspect-square border border-white/5 bg-white/3 cursor-pointer shadow-md hover:border-cyan-400 hover:shadow-lg hover:shadow-cyan-400/5 hover:scale-[1.025] transition-all duration-300"
               >
                 {isVideoSelected && !isYoutube ? (
                   <video
@@ -115,7 +120,7 @@ export default function GalleryView({ gallery }: GalleryViewProps) {
                     muted
                     playsInline
                     preload="metadata"
-                    className="w-full h-full object-cover group-hover:scale-104 transition-transform duration-500"
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                   />
                 ) : (
                   <img
@@ -123,7 +128,7 @@ export default function GalleryView({ gallery }: GalleryViewProps) {
                     alt={img.caption || "STAHIZA event capture"}
                     referrerPolicy="no-referrer"
                     loading="lazy"
-                    className="w-full h-full object-cover group-hover:scale-104 transition-transform duration-500"
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                   />
                 )}
 
@@ -163,41 +168,56 @@ export default function GalleryView({ gallery }: GalleryViewProps) {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={closeLightbox}
-            className="fixed inset-0 z-50 bg-black/95 backdrop-blur-md flex flex-col items-center justify-center p-4"
+            className="fixed inset-0 z-50 bg-black/95 backdrop-blur-md flex flex-col items-center justify-center p-4 transition-colors duration-300"
           >
-            {/* Close trigger */}
-            <button
-              onClick={closeLightbox}
-              className="absolute top-4 right-4 p-3 rounded-lg bg-black/40 border border-white/10 text-white hover:text-red-400 hover:border-red-400/40 hover:bg-red-500/5 transition-all z-50 cursor-pointer"
-              aria-label="Close viewer"
-            >
-              <X className="w-5 h-5" />
-            </button>
+            {/* Close trigger - hide in immersive */}
+            {!isImmersive && (
+              <button
+                id="lightbox-close-btn"
+                onClick={closeLightbox}
+                className="absolute top-4 right-4 p-3 rounded-lg bg-black/40 border border-white/10 text-white hover:text-red-400 hover:border-red-400/40 hover:bg-red-500/5 transition-all z-50 cursor-pointer"
+                aria-label="Close viewer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            )}
 
             {/* Main Stage */}
-            <div className="relative w-full max-w-5xl h-[70vh] flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
+            <div className="relative w-full max-w-5xl h-[70vh] flex items-center justify-center animate-none" onClick={(e) => e.stopPropagation()}>
               
-              {/* Navigation Left */}
-              <button
-                onClick={prevImage}
-                className="absolute left-2 sm:-left-16 p-2 rounded-xl bg-black/40 border border-white/10 text-white hover:text-cyan-400 hover:border-cyan-400/40 hover:bg-cyan-500/5 transition-all z-20 cursor-pointer touch-none"
-                aria-label="Previous image"
-              >
-                <ChevronLeft className="w-6 h-6" />
-              </button>
+              {/* Navigation Left - hide in immersive */}
+              {!isImmersive && (
+                <button
+                  id="lightbox-prev-btn"
+                  onClick={prevImage}
+                  className="absolute left-2 sm:-left-16 p-2 rounded-xl bg-black/40 border border-white/10 text-white hover:text-cyan-400 hover:border-cyan-400/40 hover:bg-cyan-500/5 transition-all z-20 cursor-pointer touch-none"
+                  aria-label="Previous image"
+                >
+                  <ChevronLeft className="w-6 h-6" />
+                </button>
+              )}
 
               {/* Main Image/Video frame */}
-              <div className="relative max-w-full max-h-full rounded-2xl overflow-hidden border border-white/10 bg-black/40 flex items-center justify-center shadow-2xl">
+              <motion.div
+                layout
+                id="lightbox-main-stage"
+                onClick={() => setIsImmersive(!isImmersive)}
+                className={`relative overflow-hidden flex items-center justify-center bg-black/40 shadow-2xl transition-all duration-300 ${
+                  isImmersive 
+                    ? "fixed inset-0 z-[100] w-screen h-screen max-w-none max-h-none rounded-none border-none cursor-zoom-out" 
+                    : "max-w-full max-h-full rounded-2xl border border-white/10 cursor-zoom-in"
+                }`}
+              >
                 {isVideoUrl(gallery[activeIdx].url) ? (
                   gallery[activeIdx].url.includes("youtube.com") || gallery[activeIdx].url.includes("youtu.be") ? (
-                    <div className="w-full max-w-4xl aspect-video rounded-xl overflow-hidden border border-white/10 bg-black">
+                    <div className={`aspect-video overflow-hidden bg-black transition-all duration-300 ${isImmersive ? "w-screen h-screen" : "w-full max-w-4xl rounded-xl"}`}>
                       <iframe
                         src={getYoutubeEmbedUrl(gallery[activeIdx].url)}
                         title={gallery[activeIdx].caption || "STAHIZA YouTube Video"}
                         frameBorder="0"
                         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                         allowFullScreen
-                        className="w-full h-[60vh] aspect-video"
+                        className="w-full h-full"
                       ></iframe>
                     </div>
                   ) : (
@@ -206,48 +226,80 @@ export default function GalleryView({ gallery }: GalleryViewProps) {
                       controls
                       autoPlay
                       referrerPolicy="no-referrer"
-                      className="max-w-full max-h-[70vh] rounded-xl select-none"
+                      className={`transition-all duration-300 select-none ${isImmersive ? "w-screen h-screen object-contain" : "max-w-full max-h-[70vh] rounded-xl"}`}
                     />
                   )
                 ) : (
-                  <img
+                  <motion.img
+                    layout
                     src={gallery[activeIdx].url}
                     alt={gallery[activeIdx].caption || "STAHIZA visual projection"}
                     referrerPolicy="no-referrer"
-                    className="max-w-full max-h-[70vh] object-contain rounded-xl select-none"
+                    className={`transition-all duration-300 select-none ${isImmersive ? "w-screen h-[100dvh] object-contain" : "max-w-full max-h-[70vh] object-contain rounded-xl"}`}
                   />
                 )}
-              </div>
 
-              {/* Navigation Right */}
-              <button
-                onClick={nextImage}
-                className="absolute right-2 sm:-right-16 p-2 rounded-xl bg-black/40 border border-white/10 text-white hover:text-cyan-400 hover:border-cyan-400/40 hover:bg-cyan-500/5 transition-all z-20 cursor-pointer touch-none"
-                aria-label="Next image"
+                {/* Info Overlay on Zoom Hint */}
+                {!isImmersive && (
+                  <div className="absolute inset-0 bg-black/20 opacity-0 hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
+                    <div className="p-3 bg-black/85 rounded-full border border-white/20 text-white flex items-center gap-2 text-xs font-mono">
+                      <ZoomIn className="w-4 h-4 text-cyan-400" />
+                      <span>Click to expand full screen</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Exit indicator inside immersive */}
+                {isImmersive && (
+                  <div className="absolute top-4 right-4 flex items-center gap-2 z-[110]" onClick={(e) => e.stopPropagation()}>
+                    <button
+                      id="lightbox-minimize-btn"
+                      onClick={() => setIsImmersive(false)}
+                      className="p-3 rounded-lg bg-black/60 border border-white/20 text-white hover:text-cyan-400 hover:border-cyan-400/30 hover:bg-cyan-400/10 transition-all cursor-pointer flex items-center gap-1.5"
+                      title="Exit Full Screen"
+                    >
+                      <Minimize2 className="w-4 h-4" />
+                      <span className="text-xs font-mono">Exit Full Screen</span>
+                    </button>
+                  </div>
+                )}
+              </motion.div>
+
+              {/* Navigation Right - hide in immersive */}
+              {!isImmersive && (
+                <button
+                  id="lightbox-next-btn"
+                  onClick={nextImage}
+                  className="absolute right-2 sm:-right-16 p-2 rounded-xl bg-black/40 border border-white/10 text-white hover:text-cyan-400 hover:border-cyan-400/40 hover:bg-cyan-500/5 transition-all z-20 cursor-pointer touch-none"
+                  aria-label="Next image"
+                >
+                  <ChevronRight className="w-6 h-6" />
+                </button>
+              )}
+            </div>
+
+            {/* Meta Info bar - hide in immersive */}
+            {!isImmersive && (
+              <div 
+                id="lightbox-meta-bar"
+                className="w-full max-w-3xl mt-6 p-4 rounded-xl bg-white/5 border border-white/10 text-center space-y-2 pointer-events-auto"
+                onClick={(e) => e.stopPropagation()}
               >
-                <ChevronRight className="w-6 h-6" />
-              </button>
-            </div>
-
-            {/* Meta Info bar */}
-            <div 
-              className="w-full max-w-3xl mt-6 p-4 rounded-xl bg-white/5 border border-white/10 text-center space-y-2"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <p className="text-white font-display text-base font-bold">
-                {gallery[activeIdx].caption || "STAHIZA Broadcast Feed"}
-              </p>
-              <div className="flex items-center justify-center gap-4 text-xs font-mono text-gray-400">
-                <span className="flex items-center gap-1">
-                  <Calendar className="w-3.5 h-3.5" />
-                  {new Date(gallery[activeIdx].created_at).toLocaleDateString(undefined, { 
-                    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' 
-                  })}
-                </span>
-                <span>•</span>
-                <span className="text-neon-cyan uppercase font-semibold">Frame {activeIdx + 1} of {gallery.length}</span>
+                <p className="text-white font-display text-base font-bold">
+                  {gallery[activeIdx].caption || "STAHIZA Broadcast Feed"}
+                </p>
+                <div className="flex items-center justify-center gap-4 text-xs font-mono text-gray-400">
+                  <span className="flex items-center gap-1">
+                    <Calendar className="w-3.5 h-3.5" />
+                    {new Date(gallery[activeIdx].created_at).toLocaleDateString(undefined, { 
+                      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' 
+                    })}
+                  </span>
+                  <span>•</span>
+                  <span className="text-neon-cyan uppercase font-semibold">Frame {activeIdx + 1} of {gallery.length}</span>
+                </div>
               </div>
-            </div>
+            )}
           </motion.div>
         )}
       </AnimatePresence>
